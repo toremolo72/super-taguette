@@ -209,3 +209,11 @@ msgstr "保存しました"
 #: taguette/static/js/taguette.js
 msgid "Error"
 msgstr "エラー"
+
+#: taguette/static/js/taguette.js
+msgid "Implicit folder: no tag or folder with this name exists, only sub-tags"
+msgstr "暗黙のフォルダ：この名前のタグ/フォルダ自体はなく、中身だけがあります"
+
+#: taguette/static/js/taguette.js
+msgid "New tag in this folder"
+msgstr "このフォルダにタグを作成"

@@ -334,7 +334,7 @@ def codebook_xml(tags, file):
             guid = str(guid).upper()
             attrs = {(None, 'guid'): guid,
                      (None, 'name'): tag.path,
-                     (None, 'isCodable'): 'true'}
+                     (None, 'isCodable'): 'false' if tag.is_folder else 'true'}
             qnames = {(None, 'guid'): 'guid',
                       (None, 'name'): 'name',
                       (None, 'isCodable'): 'isCodable'}

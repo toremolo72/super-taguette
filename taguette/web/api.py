@@ -317,10 +317,12 @@ class TagAdd(BaseHandler):
             validate.description(obj['description'])
             color = obj.get('color') or None
             validate.tag_color(color)
+            is_folder = bool(obj.get('is_folder', False))
             tag = database.Tag(project=project,
                                path=obj['path'],
                                description=obj['description'],
-                               color=color)
+                               color=color,
+                               is_folder=is_folder)
             try:
                 self.db.add(tag)
                 self.db.flush()  # Need to flush to get tag.id
@@ -387,6 +389,8 @@ class TagUpdate(BaseHandler):
                     color = obj['color'] or None
                     validate.tag_color(color)
                     tag.color = color
+                if 'is_folder' in obj:
+                    tag.is_folder = bool(obj['is_folder'])
                 cmds = [
                     database.Command.tag_add(self.current_user, t)
                     for t in [tag] + descendants
@@ -507,6 +511,10 @@ class HighlightAdd(BaseHandler):
         )
         if set(tag.id for tag in tags) != new_tags:
             return self.send_error_json(400, self.gettext("No such tag"))
+        if any(tag.is_folder for tag in tags):
+            return self.send_error_json(
+                400, self.gettext("Folders can't be applied to highlights"),
+            )
 
         snippet = extract.extract(document.contents, start, end)
         if all(c in '\r\n\t' for c in snippet):
@@ -596,6 +604,11 @@ class HighlightUpdate(BaseHandler):
                     return self.send_error_json(
                         400,
                         self.gettext("No such tag"),
+                    )
+                if any(tag.is_folder for tag in tags):
+                    return self.send_error_json(
+                        400,
+                        self.gettext("Folders can't be applied to highlights"),
                     )
 
                 # Update tags in database

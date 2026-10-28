@@ -913,8 +913,9 @@ function addTag(tag) {
   updateTagsList();
 
   // This is the last tag we created, check it
-  if(tag.id == last_added_tag){
-    document.getElementById('highlight-add-tags-' + tag.id).checked = true;
+  if(tag.id == last_added_tag && !tag.is_folder){
+    var cb = document.getElementById('highlight-add-tags-' + tag.id);
+    if(cb) cb.checked = true;
   }
 }
 
@@ -1098,8 +1099,9 @@ function updateTagsList() {
     var has_kids = kids.length > 0;
     var collapsed = has_kids && tag_tree_collapsed[node.path];
     var tag = node.tag;
+    var is_folder = !tag || !!tag.is_folder;
     var elem = document.createElement('li');
-    elem.className = 'list-group-item tag-row' + (tag ? '' : ' tag-row-virtual');
+    elem.className = 'list-group-item tag-row' + (tag ? '' : ' tag-row-virtual') + (is_folder ? ' tag-row-folder' : '');
     elem.style.paddingLeft = (0.75 + depth * 1.1) + 'rem';
     elem.setAttribute('data-tag-path', node.path);
     if(tag) elem.setAttribute('data-tag-id', tag.id);
@@ -1109,22 +1111,30 @@ function updateTagsList() {
     }
     var own = tag ? tag.count : 0;
     var total = subtreeCount(node);
-    var countHtml = tag
-      ? '<span class="badge badge-secondary badge-pill" id="tag-' + tag.id + '-count" title="' + total + '">' + own + '</span>'
-      : '';
-    if(has_kids) {
-      countHtml += '<span class="tag-subcount" data-subcount-path="' + escapeHtml(node.path) + '" title="' + gettext("including sub-tags") + '">' + total + '</span>';
+    var countHtml = '';
+    if(tag && !is_folder) {
+      countHtml += '<span class="badge badge-secondary badge-pill" id="tag-' + tag.id + '-count" title="' + total + '">' + own + '</span>';
+    }
+    if(has_kids || is_folder) {
+      countHtml += '<span class="tag-subcount' + (is_folder ? ' tag-subcount-folder' : '') + '" data-subcount-path="' + escapeHtml(node.path) + '" title="' + gettext("including sub-tags") + '">' + total + '</span>';
+    }
+    var iconHtml;
+    if(is_folder) {
+      iconHtml = '<i class="fas ' + (collapsed || !has_kids ? 'fa-folder' : 'fa-folder-open') + ' tag-folder-icon" style="color: ' + (tag ? tagColor(tag.id, 0.9) : 'var(--se-text-muted)') + ';"></i>';
+    } else {
+      iconHtml = '<span class="tag-swatch" style="background-color: ' + tagColor(tag.id, 0.8) + ';"></span>';
     }
     elem.innerHTML =
       '<div class="d-flex justify-content-between align-items-center">' +
       '  <div class="tag-name">' +
       '    <a href="javascript:void(0)" class="tag-chevron' + (has_kids ? '' : ' tag-chevron-empty') + (collapsed ? ' collapsed' : '') + '"><i class="fas fa-chevron-down"></i></a>' +
-      '    <span class="tag-swatch" style="background-color: ' + (tag ? tagColor(tag.id, 0.8) : 'transparent') + ';' + (tag ? '' : ' border-style: dashed;') + '"></span>' +
+      iconHtml +
       (tag
-        ? '    <a id="tag-link-' + tag.id + '">' + escapeHtml(tagLeafName(tag.path)) + '</a>'
-        : '    <span class="tag-virtual-name" title="' + gettext("No tag with this name; only sub-tags exist") + '">' + escapeHtml(tagLeafName(node.path)) + '</span>') +
+        ? '    <a id="tag-link-' + tag.id + '" class="' + (is_folder ? 'tag-folder-name' : '') + '">' + escapeHtml(tagLeafName(tag.path)) + '</a>'
+        : '    <span class="tag-virtual-name" title="' + gettext("Implicit folder: no tag or folder with this name exists, only sub-tags") + '">' + escapeHtml(tagLeafName(node.path)) + '</span>') +
       '  </div>' +
       '  <div class="tag-row-actions">' + countHtml +
+      (is_folder ? '    <a href="javascript:void(0)" class="btn btn-outline-primary btn-sm tag-row-add" title="' + gettext("New tag in this folder") + '"><i class="fas fa-plus"></i></a>' : '') +
       (tag ? '    <a href="javascript:editTag(' + tag.id + ');" class="btn btn-primary btn-sm">' + gettext("Edit") + '</a>' : '') +
       '  </div>' +
       '</div>';
@@ -1134,6 +1144,13 @@ function updateTagsList() {
       setupTagDrag(elem, tag);
     } else {
       setupTagDrag(elem, null);
+    }
+    var addBtn = elem.querySelector('.tag-row-add');
+    if(addBtn) {
+      addBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        createTag(node.path);
+      });
     }
     if(has_kids) {
       elem.querySelector('.tag-chevron').addEventListener('click', function(e) {
@@ -1178,7 +1195,7 @@ function updateTagsList() {
 }
 
 function updateModalTagsList() {
-  var entries = Object.entries(tags);
+  var entries = Object.entries(tags).filter(function(e) { return !e[1].is_folder; });
   // Save previous checked statuses
   var checked_tags = [];
   for(var i = 0; i < entries.length; ++i) {
@@ -1248,7 +1265,8 @@ function updateModalTagsList() {
 
   // Re-check checkboxes
   for(var i = 0; i < checked_tags.length; ++i) {
-    document.getElementById('highlight-add-tags-' + checked_tags[i]).checked = true;
+    var cb = document.getElementById('highlight-add-tags-' + checked_tags[i]);
+    if(cb) cb.checked = true;
   }
 
   console.log("Tags list updated");
@@ -1406,12 +1424,14 @@ function fillTagParentSelect(exclude_tag, selected_path) {
   }
 }
 
-function createTag(parent_path) {
+function createTag(parent_path, as_folder) {
   document.getElementById('tag-add-form').reset();
   document.getElementById('tag-add-id').value = '';
   fillTagParentSelect(null, parent_path || (current_tag && tagByPath(current_tag) ? current_tag : ''));
   setTagEditorColor('');
-  document.getElementById('tag-add-label-new').style.display = '';
+  document.getElementById('tag-add-folder').checked = !!as_folder;
+  document.getElementById('tag-add-label-folder').style.display = as_folder ? '' : 'none';
+  document.getElementById('tag-add-label-new').style.display = as_folder ? 'none' : '';
   document.getElementById('tag-add-label-change').style.display = 'none';
   document.getElementById('tag-add-cancel').style.display = '';
   document.getElementById('tag-add-delete').style.display = 'none';
@@ -1419,8 +1439,14 @@ function createTag(parent_path) {
   $(tag_add_modal).modal();
 }
 
+function createFolder(parent_path) {
+  createTag(parent_path, true);
+}
+
 function editTag(tag_id) {
   document.getElementById('tag-add-form').reset();
+  document.getElementById('tag-add-folder').checked = !!tags['' + tag_id].is_folder;
+  document.getElementById('tag-add-label-folder').style.display = 'none';
   document.getElementById('tag-add-id').value = '' + tag_id;
   document.getElementById('tag-add-path').value = tagLeafName(tags['' + tag_id].path);
   fillTagParentSelect(tags['' + tag_id], tagParentPath(tags['' + tag_id].path));
@@ -1459,7 +1485,8 @@ document.getElementById('tag-add-form').addEventListener('submit', function(e) {
       '/api/project/' + project_id + '/tag/' + tag_id,
       {path: tag_path,
        description: document.getElementById('tag-add-description').value,
-       color: tag_color_input.value || null}
+       color: tag_color_input.value || null,
+       is_folder: document.getElementById('tag-add-folder').checked}
     );
   } else {
     console.log("Posting new tag");
@@ -1467,7 +1494,8 @@ document.getElementById('tag-add-form').addEventListener('submit', function(e) {
       '/api/project/' + project_id + '/tag/new',
       {path: tag_path,
        description: document.getElementById('tag-add-description').value,
-       color: tag_color_input.value || null}
+       color: tag_color_input.value || null,
+       is_folder: document.getElementById('tag-add-folder').checked}
     );
   }
   showSpinner();
@@ -1830,7 +1858,8 @@ function editHighlightById(id) {
   document.getElementById('highlight-add-end').value = highlights[id].end_offset;
   var hl_tags = highlights['' + id].tags;
   for(var i = 0; i < hl_tags.length; ++i) {
-    document.getElementById('highlight-add-tags-' + hl_tags[i]).checked = true;
+    var cb = document.getElementById('highlight-add-tags-' + hl_tags[i]);
+    if(cb) cb.checked = true;
   }
   document.getElementById('highlight-add-memo').value = highlights['' + id].memo || '';
   $(highlight_add_modal).modal().drags({handle: '.modal-header'});
@@ -1849,7 +1878,8 @@ document.getElementById('highlight-add-form').addEventListener('submit', functio
   var entries = Object.entries(tags);
   for(var i = 0; i < entries.length; ++i) {
     var id = entries[i][1].id;
-    if(document.getElementById('highlight-add-tags-' + id).checked) {
+    var cb = document.getElementById('highlight-add-tags-' + id);
+    if(cb && cb.checked) {
       hl_tags.push(id);
     }
   }
@@ -2084,7 +2114,7 @@ function quickpickOpenForHighlight(id, x, y) {
 
 function quickpickFiltered() {
   var query = quickpick_input.value.trim();
-  var entries = Object.values(tags);
+  var entries = Object.values(tags).filter(function(t) { return !t.is_folder; });
   if(query) {
     entries = entries.filter(function(t) { return t.path.indexOf(query) > -1; });
     // Exact match first, then prefix matches, then alphabetical
@@ -2859,7 +2889,8 @@ function longPollForEvents() {
           id: event.tag_id,
           path: event.tag_path,
           description: event.description,
-          color: event.color || null
+          color: event.color || null,
+          is_folder: !!event.is_folder
         });
       } else if(event.type === 'tag_delete') {
         removeTag(event.tag_id);

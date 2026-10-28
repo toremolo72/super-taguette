@@ -735,6 +735,7 @@ class Project(BaseHandler):
                           'path': tag.path,
                           'description': tag.description,
                           'color': tag.color,
+                          'is_folder': bool(tag.is_folder),
                           'count': tag.highlights_count}
             for tag in project.tags
         })

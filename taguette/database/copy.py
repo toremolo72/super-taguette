@@ -82,6 +82,7 @@ def copy_project(
             path=validate.tag_path,
             description=validate.description,
             color=validate.tag_color,
+            is_folder=lambda v: v is None or isinstance(v, (bool, int)),
         ),
     )
 
@@ -134,7 +135,7 @@ def copy_project(
 
         # Check that the right JSON fields are set
         # ('color' was added later, so it may be missing from old files)
-        optional_payload_fields = {'color', 'memo'}
+        optional_payload_fields = {'color', 'memo', 'is_folder'}
         if not (
             expected_payload_fields - optional_payload_fields
             <= payload.keys()
@@ -162,6 +163,7 @@ def copy_project(
             tag_id=lambda v: isinstance(v, int),
             tag_path=validate.tag_path,
             color=validate.tag_color,
+            is_folder=lambda v: v is None or isinstance(v, bool),
             memo=validate.memo,
             src_tag_id=lambda v: isinstance(v, int),
             dest_tag_id=lambda v: isinstance(v, int),

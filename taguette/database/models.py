@@ -474,7 +474,7 @@ class Command(Base):
     @classmethod
     @command_fields(
         columns=['project_id'],
-        payload_fields=['tag_id', 'tag_path', 'description', 'color'],
+        payload_fields=['tag_id', 'tag_path', 'description', 'color', 'is_folder'],
     )
     def tag_add(cls, user_login, tag):
         assert isinstance(tag, Tag)
@@ -486,7 +486,8 @@ class Command(Base):
                      'tag_id': tag.id,
                      'tag_path': tag.path,
                      'description': tag.description,
-                     'color': tag.color},
+                     'color': tag.color,
+                     'is_folder': bool(tag.is_folder)},
         )
 
     @classmethod
@@ -631,6 +632,8 @@ class Tag(Base):
     description = Column(Text, nullable=False)
     # Display color as '#rrggbb', or NULL to pick one automatically
     color = Column(String(7), nullable=True)
+    # Folders group tags in the tree but can't be applied to highlights
+    is_folder = Column(Boolean, nullable=True)
 
     __table_args__ = (
         UniqueConstraint('project_id', 'path'),

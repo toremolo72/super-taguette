@@ -1340,3 +1340,45 @@ li.tag-current {
   color: var(--se-purple);
   font-size: 0.85em;
 }
+
+/* ---------- Folders in the tag tree ---------- */
+
+.tag-folder-icon {
+  width: 1.1em;
+  margin-right: 0.45em;
+  font-size: 0.95em;
+}
+.tag-row-folder .tag-folder-name,
+.container-body .tag-row-folder a.tag-folder-name:not(.btn) {
+  color: var(--se-text-strong);
+  font-weight: 600;
+}
+.tag-row-folder {
+  background-color: var(--se-panel);
+}
+.tag-row-folder.tag-row-virtual {
+  background-color: transparent;
+}
+.tag-subcount-folder::before {
+  content: "";
+}
+.tag-row-add {
+  padding: 0.15rem 0.5rem;
+}
+.tag-row-folder.tag-dragover {
+  background-color: var(--se-lavender-2) !important;
+}
+
+.tag-folder-editor {
+  margin-bottom: 0.75rem;
+  font-size: 0.9em;
+  color: var(--se-text);
+}
+.tag-folder-editor label {
+  margin: 0;
+  cursor: pointer;
+}
+.tag-folder-editor input {
+  margin-right: 0.3em;
+  accent-color: var(--se-purple);
+}

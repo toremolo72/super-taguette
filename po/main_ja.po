@@ -1177,3 +1177,37 @@ msgstr "疑問点・コメント・解釈…"
 msgctxt "exported highlight details"
 msgid "Memo:"
 msgstr "メモ:"
+
+#: taguette/web/api.py
+msgid "Folders can't be applied to highlights"
+msgstr "フォルダはハイライトに付けられません"
+
+#: taguette/templates/project.html
+msgctxt "tag tree"
+msgid "Folders group tags; they can't be applied to highlights"
+msgstr "フォルダはタグをまとめるためのもので、ハイライトには付けられません"
+
+#: taguette/templates/project.html
+msgctxt "tag tree"
+msgid "New folder"
+msgstr "フォルダを作成"
+
+#: taguette/templates/project.html
+msgctxt "tag change form label"
+msgid "Parent"
+msgstr "入れる場所"
+
+#: taguette/templates/project.html
+msgctxt "tag change form"
+msgid "This is a folder (groups tags, can't be applied to highlights)"
+msgstr "これはフォルダ（タグをまとめる入れ物。ハイライトには付けない）"
+
+#: taguette/templates/project.html
+msgctxt "modal window title"
+msgid "New folder"
+msgstr "新しいフォルダ"
+
+#: taguette/templates/project.html
+msgctxt "tag tree drop zone"
+msgid "Drop here to move out of all folders"
+msgstr "ここにドロップでフォルダの外（トップレベル）へ"
