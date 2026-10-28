@@ -434,7 +434,54 @@ function splitAtPos(pos, after) {
 }
 
 // Highlight a described selection
-function highlightSelection(saved, id, clickedCallback, title) {
+// Palette offered in the tag editor: comes from the current theme's CSS
+function themeTagPalette() {
+  var raw = getComputedStyle(document.documentElement).getPropertyValue('--tag-palette');
+  var colors = raw.split(',').map(function(c) { return c.trim().toLowerCase(); })
+    .filter(function(c) { return /^#[0-9a-f]{6}$/.test(c); });
+  if(colors.length === 0) {
+    colors = ['#eeaabe', '#e4846f', '#e7d59a', '#98c4ba', '#82b4e3', '#b4addf', '#cfc9f4', '#e4bcbf'];
+  }
+  return colors;
+}
+var TAG_PALETTE = themeTagPalette();
+
+// Current theme's accent color (used for the not-yet-saved highlight)
+function themeAccent(alpha) {
+  var c = getComputedStyle(document.documentElement).getPropertyValue('--se-lavender').trim();
+  if(/^#[0-9a-fA-F]{6}$/.test(c)) {
+    return hexToRgba(c, alpha);
+  }
+  return 'rgba(180, 173, 223, ' + alpha + ')';
+}
+
+function hexToRgba(hex, alpha) {
+  var r = parseInt(hex.substring(1, 3), 16);
+  var g = parseInt(hex.substring(3, 5), 16);
+  var b = parseInt(hex.substring(5, 7), 16);
+  return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
+}
+
+// Automatic color for a tag without one (golden-angle hue spacing)
+function autoTagColor(tag_id, alpha) {
+  var hue = (tag_id * 137.508) % 360;
+  return 'hsla(' + hue.toFixed(1) + ', 60%, 70%, ' + alpha + ')';
+}
+
+// Color of a tag: the one chosen by the user, or an automatic one
+function tagColor(tag_id, alpha) {
+  if(tag_id === null || tag_id === undefined) {
+    return 'rgba(170, 170, 180, ' + alpha + ')';
+  }
+  var tag = tags['' + tag_id];
+  if(tag && tag.color) {
+    return hexToRgba(tag.color, alpha);
+  }
+  return autoTagColor(tag_id, alpha);
+}
+
+// Highlight a described selection
+function highlightSelection(saved, id, clickedCallback, title, color) {
   console.log("Highlighting", saved);
   if(saved === null) {
     return;
@@ -454,6 +501,9 @@ function highlightSelection(saved, id, clickedCallback, title) {
       span.className = 'highlight highlight-' + id;
       span.setAttribute('data-highlight-id', '' + id);
       span.setAttribute('title', title);
+      if(color) {
+        span.style.backgroundColor = color;
+      }
       span.addEventListener('click', clickedCallback);
       node.parentNode.insertBefore(span, node);
       span.appendChild(node);
@@ -871,6 +921,7 @@ function updateTagsList() {
     elem.innerHTML =
       '<div class="d-flex justify-content-between align-items-center">' +
       '  <div class="tag-name">' +
+      '    <span class="tag-swatch" style="background-color: ' + tagColor(tag.id, 0.8) + ';"></span>' +
       '    <a id="tag-link-' + tag.id + '">' + escapeHtml(tag.path) + '</a>' +
       '  </div>' +
       '  <div style="white-space: nowrap;">' +
@@ -895,6 +946,10 @@ function updateTagsList() {
   var hl_entries = Object.entries(highlights);
   for(var i = 0; i < hl_entries.length; ++i) {
     setHighlight(hl_entries[i][1]);
+  }
+
+  if(quickpick_state) {
+    quickpickRender();
   }
 
   console.log("Highlights updated");
@@ -958,7 +1013,9 @@ function updateModalTagsList() {
     elem.className = 'tag-name form-check ' + searchHitClass;
     elem.innerHTML =
       '<input type="checkbox" class="form-check-input" value="' + tag.id + '" name="highlight-add-tags" id="highlight-add-tags-' + tag.id + '" />' +
-      '<label for="highlight-add-tags-' + tag.id + '" class="form-check-label ">' + escapeHtml(tag.path) + '</label>';
+      '<label for="highlight-add-tags-' + tag.id + '" class="form-check-label ">' +
+      '<span class="tag-swatch" style="background-color: ' + tagColor(tag.id, 0.9) + ';"></span>' +
+      escapeHtml(tag.path) + '</label>';
     tags_modal_list.insertBefore(elem, before);
   }
   if(entries.length == 0) {
@@ -1014,6 +1071,59 @@ function updateTagCount(id, delta) {
 }
 
 var tag_add_modal = document.getElementById('tag-add-modal');
+var tag_color_input = document.getElementById('tag-add-color');
+var tag_color_custom = document.getElementById('tag-add-color-custom');
+var tag_color_palette = document.getElementById('tag-add-palette');
+
+// Set the color in the tag editor ('' means automatic)
+function setTagEditorColor(color) {
+  tag_color_input.value = color || '';
+  var swatches = tag_color_palette.getElementsByClassName('palette-swatch');
+  for(var i = 0; i < swatches.length; ++i) {
+    var c = swatches[i].getAttribute('data-color');
+    swatches[i].classList.toggle('selected', c === (color || ''));
+  }
+  if(color) {
+    tag_color_custom.value = color;
+  }
+  var preview = document.getElementById('tag-add-color-preview');
+  var tag_id = document.getElementById('tag-add-id').value;
+  preview.style.backgroundColor = color
+    ? hexToRgba(color, 0.9)
+    : (tag_id ? autoTagColor(parseInt(tag_id), 0.9) : 'rgba(170, 170, 180, 0.9)');
+}
+
+// Build the palette (rebuilt when the theme changes)
+function buildTagPalette() {
+  TAG_PALETTE = themeTagPalette();
+  while(tag_color_palette.firstChild) {
+    tag_color_palette.removeChild(tag_color_palette.firstChild);
+  }
+  var auto = document.createElement('a');
+  auto.href = 'javascript:void(0)';
+  auto.className = 'palette-swatch palette-auto';
+  auto.setAttribute('data-color', '');
+  auto.setAttribute('title', gettext("Automatic color"));
+  auto.textContent = 'A';
+  auto.addEventListener('click', function() { setTagEditorColor(''); });
+  tag_color_palette.appendChild(auto);
+  for(var i = 0; i < TAG_PALETTE.length; ++i) {
+    (function(c) {
+      var sw = document.createElement('a');
+      sw.href = 'javascript:void(0)';
+      sw.className = 'palette-swatch';
+      sw.setAttribute('data-color', c);
+      sw.style.backgroundColor = c;
+      sw.addEventListener('click', function() { setTagEditorColor(c); });
+      tag_color_palette.appendChild(sw);
+    })(TAG_PALETTE[i]);
+  }
+}
+buildTagPalette();
+document.addEventListener('taguette-theme-changed', buildTagPalette);
+tag_color_custom.addEventListener('input', function() {
+  setTagEditorColor(tag_color_custom.value);
+});
 
 $(tag_add_modal).on('shown.bs.modal', function() {
   document.getElementById('tag-add-path').focus();
@@ -1022,6 +1132,7 @@ $(tag_add_modal).on('shown.bs.modal', function() {
 function createTag() {
   document.getElementById('tag-add-form').reset();
   document.getElementById('tag-add-id').value = '';
+  setTagEditorColor('');
   document.getElementById('tag-add-label-new').style.display = '';
   document.getElementById('tag-add-label-change').style.display = 'none';
   document.getElementById('tag-add-cancel').style.display = '';
@@ -1035,6 +1146,7 @@ function editTag(tag_id) {
   document.getElementById('tag-add-id').value = '' + tag_id;
   document.getElementById('tag-add-path').value = tags['' + tag_id].path;
   document.getElementById('tag-add-description').value = tags['' + tag_id].description;
+  setTagEditorColor(tags['' + tag_id].color || '');
   document.getElementById('tag-add-label-new').style.display = 'none';
   document.getElementById('tag-add-label-change').style.display = '';
   document.getElementById('tag-add-cancel').style.display = 'none';
@@ -1064,14 +1176,16 @@ document.getElementById('tag-add-form').addEventListener('submit', function(e) {
     req = postJSON(
       '/api/project/' + project_id + '/tag/' + tag_id,
       {path: tag_path,
-       description: document.getElementById('tag-add-description').value}
+       description: document.getElementById('tag-add-description').value,
+       color: tag_color_input.value || null}
     );
   } else {
     console.log("Posting new tag");
     req = postJSON(
       '/api/project/' + project_id + '/tag/new',
       {path: tag_path,
-       description: document.getElementById('tag-add-description').value}
+       description: document.getElementById('tag-add-description').value,
+       color: tag_color_input.value || null}
     );
   }
   showSpinner();
@@ -1200,11 +1314,12 @@ function setHighlight(highlight) {
     removeHighlight(id);
   }
   highlights[id] = highlight;
-  var tag_names = highlight.tags.map(function(id) { return tags[id].path; });
-  sortByKey(tag_names, function(path) { return path; });
-  tag_names = tag_names.join(", ");
+  var hl_tags = highlight.tags.slice();
+  sortByKey(hl_tags, function(id) { return tags[id].path; });
+  var tag_names = hl_tags.map(function(id) { return tags[id].path; }).join(", ");
+  var color = tagColor(hl_tags.length > 0 ? hl_tags[0] : null, 0.55);
   try {
-    highlightSelection([highlight.start_offset, highlight.end_offset], id, editHighlight, tag_names);
+    highlightSelection([highlight.start_offset, highlight.end_offset], id, highlightClicked, tag_names, color);
     console.log("Highlight set:", highlight);
   } catch(error) {
     console.error(
@@ -1223,6 +1338,10 @@ function removeHighlight(id) {
 
   delete highlights[id];
   console.log("Highlight removed:", id);
+  if(quickpick_state && quickpick_state.hl_id !== null
+   && '' + quickpick_state.hl_id === id) {
+    quickpickClose();
+  }
 
   // Loop over highlight-<id> elements
   var elements = document.getElementsByClassName('highlight-' + id);
@@ -1259,29 +1378,35 @@ var highlight_add_modal = document.getElementById('highlight-add-modal');
 // Updates current_selection and visibility of the controls
 function selectionChanged() {
   current_selection = describeSelection();
-  var hlinfo = document.getElementById('hlinfo');
-  if(current_selection !== null) {
-    var current_range = window.getSelection().getRangeAt(0);
-    if(current_range.toString().match(onlyWhitespace)) {
-      hlinfo.style.display = 'none';
-    } else if(current_range.endOffset > 0) {
-      var last_char_range = document.createRange();
-      last_char_range.setStart(current_range.endContainer, current_range.endOffset - 1);
-      last_char_range.setEnd(current_range.endContainer, current_range.endOffset);
-      var rect = last_char_range.getClientRects().item(0);
-      var scrollPos = getScrollPos();
-      hlinfo.style.left = ((rect.x || rect.left) + rect.width) + 'px';
-      hlinfo.style.top = ((rect.y || rect.top) + rect.height + scrollPos.y + 20) + 'px';
-      hlinfo.style.display = 'block';
-    } else {
-      // We are in a weird situation where the end of the selection is in
-      // an empty node. We just don't move the popup, seems to work in practice
-    }
-  } else {
-    hlinfo.style.display = 'none';
-  }
 }
 document.addEventListener('selectionchange', selectionChanged);
+
+// When the mouse is released after selecting text, open the quick tag picker
+document.addEventListener('mouseup', function(e) {
+  if(quickpick.contains(e.target) || hlchooser.contains(e.target)) {
+    return;
+  }
+  // Let the browser finalize the selection first
+  setTimeout(function() {
+    var sel = window.getSelection();
+    if(sel.rangeCount == 0 || sel.isCollapsed) {
+      return;
+    }
+    var range = sel.getRangeAt(0);
+    if(!document_contents.contains(range.commonAncestorContainer)) {
+      return;
+    }
+    if(range.toString().match(onlyWhitespace)) {
+      return;
+    }
+    var selection = describeSelection();
+    if(selection === null) {
+      return;
+    }
+    var rect = range.getBoundingClientRect();
+    quickpickOpenForSelection(selection, rect);
+  }, 0);
+});
 
 function createHighlight(selection) {
   document.getElementById('highlight-add-id').value = '';
@@ -1296,14 +1421,118 @@ function createHighlight(selection) {
 var newtag_key = gettext('n');
 
 document.addEventListener('keyup', function(e) {
-  if(event.key == newtag_key && current_selection !== null) {
+  var tag = e.target && e.target.tagName;
+  if(tag == 'INPUT' || tag == 'TEXTAREA') {
+    return;
+  }
+  if(e.key == newtag_key && current_selection !== null) {
     createHighlight(current_selection);
   }
 });
 
+// Text of a highlight as currently displayed, shortened
+function highlightSnippet(id, maxlen) {
+  var elements = document.getElementsByClassName('highlight-' + id);
+  var text = '';
+  for(var i = 0; i < elements.length; ++i) {
+    text += elements[i].textContent;
+  }
+  text = text.replace(/\s+/g, ' ').trim();
+  if(text.length > maxlen) {
+    text = text.substring(0, maxlen) + '\u2026';
+  }
+  return text;
+}
+
+var hlchooser = document.getElementById('hlchooser');
+
+function hideHighlightChooser() {
+  hlchooser.style.display = 'none';
+  while(hlchooser.firstChild) {
+    hlchooser.removeChild(hlchooser.firstChild);
+  }
+}
+document.addEventListener('click', function(e) {
+  if(!hlchooser.contains(e.target)) {
+    hideHighlightChooser();
+  }
+});
+
+// Show a popup to pick one of several overlapping highlights
+function showHighlightChooser(ids, e) {
+  hideHighlightChooser();
+  var header = document.createElement('div');
+  header.className = 'hlchooser-title';
+  header.textContent = gettext("Overlapping highlights: pick one to edit");
+  hlchooser.appendChild(header);
+  for(var i = 0; i < ids.length; ++i) {
+    (function(id) {
+      var hl = highlights[id];
+      var hl_tags = hl.tags.slice();
+      sortByKey(hl_tags, function(tid) { return tags[tid].path; });
+      var item = document.createElement('a');
+      item.className = 'hlchooser-item';
+      item.href = 'javascript:void(0)';
+      var swatch = document.createElement('span');
+      swatch.className = 'tag-swatch';
+      swatch.style.backgroundColor = tagColor(hl_tags.length > 0 ? hl_tags[0] : null, 0.8);
+      item.appendChild(swatch);
+      var label = document.createElement('span');
+      var names = hl_tags.map(function(tid) { return tags[tid].path; }).join(', ');
+      label.textContent = (names || gettext("(no tags)"));
+      item.appendChild(label);
+      var snippet = document.createElement('span');
+      snippet.className = 'hlchooser-snippet';
+      snippet.textContent = '\u201c' + highlightSnippet(id, 40) + '\u201d';
+      item.appendChild(snippet);
+      item.addEventListener('click', function(ev) {
+        ev.preventDefault();
+        hideHighlightChooser();
+        quickpickOpenForHighlight(id, ev.clientX, ev.clientY);
+      });
+      hlchooser.appendChild(item);
+    })(ids[i]);
+  }
+  var scrollPos = getScrollPos();
+  hlchooser.style.display = 'block';
+  // Keep the popup inside the viewport
+  var x = Math.min(e.clientX, window.innerWidth - hlchooser.offsetWidth - 16);
+  hlchooser.style.left = (Math.max(0, x) + scrollPos.x) + 'px';
+  hlchooser.style.top = (e.clientY + scrollPos.y + 12) + 'px';
+}
+
+// Click on a highlight: open it, or ask which one if several overlap here
+function highlightClicked(e) {
+  e.stopPropagation();
+  var ids = [];
+  var node = e.target;
+  while(node && node !== document_contents) {
+    if(node.classList && node.classList.contains('highlight')) {
+      var hid = node.getAttribute('data-highlight-id');
+      if(ids.indexOf(hid) == -1 && highlights[hid]) {
+        ids.push(hid);
+      }
+    }
+    node = node.parentNode;
+  }
+  if(ids.length <= 1) {
+    quickpickOpenForHighlight(this.getAttribute('data-highlight-id'), e.clientX, e.clientY);
+  } else {
+    // Innermost (shortest) first
+    sortByKey(ids, function(hid) {
+      return highlights[hid].end_offset - highlights[hid].start_offset;
+    });
+    showHighlightChooser(ids, e);
+  }
+}
+
 function editHighlight() {
+  editHighlightById(this.getAttribute('data-highlight-id'));
+}
+
+function editHighlightById(id) {
   highlightModalReset();
-  var id = this.getAttribute('data-highlight-id');
+  id = '' + id;
   document.getElementById('highlight-add-id').value = id;
   document.getElementById('highlight-add-start').value = highlights[id].start_offset;
   document.getElementById('highlight-add-end').value = highlights[id].end_offset;
@@ -1379,6 +1608,305 @@ document.getElementById('highlight-delete').addEventListener('click', function()
       console.error("Failed to delete highlight:", error);
       alert(gettext("Couldn't delete highlight!") + "\n\n" + error);
     });
+  }
+});
+
+
+/*
+ * Quick tag picker: appears right after selecting text, or when clicking
+ * a highlight. Clicking a tag applies it immediately, no modal needed.
+ */
+
+var quickpick = document.getElementById('quickpick');
+var quickpick_input = document.getElementById('quickpick-search');
+var quickpick_list = document.getElementById('quickpick-list');
+var quickpick_snippet = document.getElementById('quickpick-snippet');
+var quickpick_footer = document.getElementById('quickpick-footer');
+var quickpick_state = null;  // {selection, hl_id, tags, busy}
+var quickpick_active = 0;    // keyboard-selected row
+
+function quickpickRemovePending() {
+  var elements = document.getElementsByClassName('highlight-pending');
+  while(elements.length > 0) {
+    var node = elements[0];
+    while(node.firstChild) {
+      node.parentNode.insertBefore(node.firstChild, node);
+    }
+    node.parentNode.removeChild(node);
+  }
+}
+
+function quickpickClose() {
+  if(!quickpick_state) {
+    return;
+  }
+  quickpickRemovePending();
+  quickpick_state = null;
+  quickpick.style.display = 'none';
+  quickpick_input.value = '';
+}
+
+function quickpickPosition(x, y, prefer_above_y) {
+  quickpick.style.display = 'block';
+  var scrollPos = getScrollPos();
+  var w = quickpick.offsetWidth, h = quickpick.offsetHeight;
+  x = Math.max(8, Math.min(x, window.innerWidth - w - 16));
+  if(y + h > window.innerHeight - 8 && prefer_above_y - h - 8 > 0) {
+    y = prefer_above_y - h - 8;
+  }
+  quickpick.style.left = (x + scrollPos.x) + 'px';
+  quickpick.style.top = (y + scrollPos.y) + 'px';
+}
+
+function quickpickOpenForSelection(selection, rect) {
+  if(quickpick_state && quickpick_state.hl_id === null
+   && quickpick_state.selection[0] == selection[0]
+   && quickpick_state.selection[1] == selection[1]) {
+    return;  // already open for this selection
+  }
+  quickpickClose();
+  quickpick_state = {selection: selection, hl_id: null, tags: [], busy: false};
+  // Show the future highlight right away
+  highlightSelection(selection, 'pending', function(e) { e.stopPropagation(); }, '', themeAccent(0.4));
+  quickpick_active = 0;
+  quickpickRender();
+  quickpickPosition(rect.left, rect.bottom + 8, rect.top);
+  quickpick_input.focus({preventScroll: true});
+}
+
+function quickpickOpenForHighlight(id, x, y) {
+  quickpickClose();
+  var hl = highlights['' + id];
+  if(!hl) {
+    return;
+  }
+  quickpick_state = {
+    selection: [hl.start_offset, hl.end_offset],
+    hl_id: parseInt(id),
+    tags: hl.tags.slice(),
+    busy: false,
+  };
+  quickpick_active = 0;
+  quickpickRender();
+  quickpickPosition(x, y + 12, y);
+  quickpick_input.focus({preventScroll: true});
+}
+
+function quickpickFiltered() {
+  var query = quickpick_input.value.trim();
+  var entries = Object.values(tags);
+  if(query) {
+    entries = entries.filter(function(t) { return t.path.indexOf(query) > -1; });
+    // Exact match first, then prefix matches, then alphabetical
+    sortByKey(entries, function(t) {
+      return (t.path === query ? '0' : t.path.indexOf(query) === 0 ? '1' : '2') + t.path;
+    });
+  } else {
+    sortByKey(entries, function(t) { return t.path; });
+  }
+  return entries;
+}
+
+function quickpickRender() {
+  var st = quickpick_state;
+  if(st === null) {
+    return;
+  }
+  // Snippet
+  var snippet = st.hl_id !== null
+    ? highlightSnippet(st.hl_id, 60)
+    : (function() {
+        var elems = document.getElementsByClassName('highlight-pending');
+        var text = '';
+        for(var i = 0; i < elems.length; ++i) text += elems[i].textContent;
+        text = text.replace(/\s+/g, ' ').trim();
+        return text.length > 60 ? text.substring(0, 60) + '\u2026' : text;
+      })();
+  quickpick_snippet.textContent = snippet;
+
+  // Tag rows
+  while(quickpick_list.firstChild) {
+    quickpick_list.removeChild(quickpick_list.firstChild);
+  }
+  var query = quickpick_input.value.trim();
+  var entries = quickpickFiltered();
+  var exact = entries.some(function(t) { return t.path === query; });
+  var rows = entries.length + ((query && !exact) ? 1 : 0);
+  if(quickpick_active >= rows) quickpick_active = Math.max(0, rows - 1);
+
+  entries.forEach(function(tag, idx) {
+    var row = document.createElement('a');
+    row.href = 'javascript:void(0)';
+    row.className = 'quickpick-row';
+    if(st.tags.indexOf(tag.id) > -1) row.classList.add('checked');
+    if(idx === quickpick_active) row.classList.add('active');
+    row.innerHTML =
+      '<span class="quickpick-check"><i class="fas fa-check"></i></span>' +
+      '<span class="tag-swatch" style="background-color: ' + tagColor(tag.id, 0.9) + ';"></span>' +
+      '<span class="quickpick-name">' + escapeHtml(tag.path) + '</span>';
+    row.addEventListener('mousedown', function(e) { e.preventDefault(); });  // keep input focus
+    row.addEventListener('click', function(e) {
+      e.preventDefault();
+      quickpickToggle(tag.id);
+    });
+    quickpick_list.appendChild(row);
+  });
+  if(query && !exact) {
+    var row = document.createElement('a');
+    row.href = 'javascript:void(0)';
+    row.className = 'quickpick-row quickpick-create';
+    if(entries.length === quickpick_active) row.classList.add('active');
+    row.innerHTML =
+      '<span class="quickpick-check"><i class="fas fa-plus"></i></span>' +
+      '<span class="quickpick-name">' +
+      gettext("Create tag \u201c%(tag)s\u201d", {tag: escapeHtml(query)}) +
+      '</span>';
+    row.addEventListener('mousedown', function(e) { e.preventDefault(); });
+    row.addEventListener('click', function(e) {
+      e.preventDefault();
+      quickpickCreateTag(query);
+    });
+    quickpick_list.appendChild(row);
+  }
+  if(rows === 0) {
+    var empty = document.createElement('div');
+    empty.className = 'quickpick-empty';
+    empty.textContent = gettext("Type a name to create a tag");
+    quickpick_list.appendChild(empty);
+  }
+
+  // Footer
+  while(quickpick_footer.firstChild) {
+    quickpick_footer.removeChild(quickpick_footer.firstChild);
+  }
+  if(st.hl_id !== null) {
+    var details = document.createElement('a');
+    details.href = 'javascript:void(0)';
+    details.textContent = gettext("Details\u2026");
+    details.addEventListener('click', function(e) {
+      e.preventDefault();
+      var id = st.hl_id;
+      quickpickClose();
+      editHighlightById(id);
+    });
+    quickpick_footer.appendChild(details);
+    var del = document.createElement('a');
+    del.href = 'javascript:void(0)';
+    del.className = 'quickpick-delete';
+    del.textContent = gettext("Delete highlight");
+    del.addEventListener('click', function(e) {
+      e.preventDefault();
+      var id = st.hl_id;
+      deleteURL('/api/project/' + project_id + '/document/' + current_document + '/highlight/' + id)
+      .then(quickpickClose)
+      .catch(function(error) {
+        console.error("Failed to delete highlight:", error);
+        alert(gettext("Couldn't delete highlight!") + "\n\n" + error);
+      });
+    });
+    quickpick_footer.appendChild(del);
+  } else {
+    var hint = document.createElement('span');
+    hint.className = 'quickpick-hint';
+    hint.textContent = gettext("Click a tag to highlight \u00b7 Esc to cancel");
+    quickpick_footer.appendChild(hint);
+  }
+}
+
+function quickpickSave(tag_ids) {
+  var st = quickpick_state;
+  if(st === null || st.busy) {
+    return;
+  }
+  st.busy = true;
+  var base = '/api/project/' + project_id + '/document/' + current_document + '/highlight/';
+  var url = st.hl_id !== null ? base + st.hl_id : base + 'new';
+  postJSON(url, {start_offset: st.selection[0], end_offset: st.selection[1], tags: tag_ids})
+  .then(function(reply) {
+    if(quickpick_state !== st) return;
+    if(st.hl_id === null) {
+      st.hl_id = reply.id;
+      quickpickRemovePending();
+    }
+    st.tags = tag_ids;
+    st.busy = false;
+    quickpickRender();
+  })
+  .catch(function(error) {
+    st.busy = false;
+    console.error("Failed to save highlight:", error);
+    alert(gettext("Couldn't create highlight!") + "\n\n" + error);
+  });
+}
+
+function quickpickToggle(tag_id) {
+  var st = quickpick_state;
+  if(st === null) return;
+  var cur = st.tags.slice();
+  var idx = cur.indexOf(tag_id);
+  if(idx > -1) cur.splice(idx, 1); else cur.push(tag_id);
+  quickpick_input.value = '';
+  quickpickSave(cur);
+}
+
+function quickpickCreateTag(path) {
+  var st = quickpick_state;
+  if(st === null || !path) return;
+  postJSON('/api/project/' + project_id + '/tag/new',
+           {path: path, description: '', color: null})
+  .then(function(reply) {
+    if(quickpick_state !== st) return;
+    quickpick_input.value = '';
+    quickpickToggle(reply.id);
+  })
+  .catch(function(error) {
+    console.error("Failed to create tag:", error);
+    alert(gettext("Couldn't create tag!") + "\n\n" + error);
+  });
+}
+
+quickpick_input.addEventListener('input', function() {
+  quickpick_active = 0;
+  quickpickRender();
+});
+quickpick_input.addEventListener('keydown', function(e) {
+  if(!quickpick_state) return;
+  var query = quickpick_input.value.trim();
+  var entries = quickpickFiltered();
+  var exact = entries.some(function(t) { return t.path === query; });
+  var rows = entries.length + ((query && !exact) ? 1 : 0);
+  if(e.key === 'Escape') {
+    e.preventDefault();
+    quickpickClose();
+  } else if(e.key === 'ArrowDown') {
+    e.preventDefault();
+    if(rows > 0) quickpick_active = (quickpick_active + 1) % rows;
+    quickpickRender();
+  } else if(e.key === 'ArrowUp') {
+    e.preventDefault();
+    if(rows > 0) quickpick_active = (quickpick_active - 1 + rows) % rows;
+    quickpickRender();
+  } else if(e.key === 'Enter') {
+    e.preventDefault();
+    if(e.shiftKey && query && !exact) {
+      quickpickCreateTag(query);
+    } else if(quickpick_active < entries.length) {
+      quickpickToggle(entries[quickpick_active].id);
+    } else if(query && !exact) {
+      quickpickCreateTag(query);
+    }
+  }
+});
+
+// Close when clicking anywhere else
+document.addEventListener('mousedown', function(e) {
+  if(quickpick_state && !quickpick.contains(e.target)) {
+    quickpickClose();
+  }
+});
+document.addEventListener('keydown', function(e) {
+  if(e.key === 'Escape' && quickpick_state) {
+    quickpickClose();
   }
 });
 
@@ -1925,7 +2453,8 @@ function longPollForEvents() {
         addTag({
           id: event.tag_id,
           path: event.tag_path,
-          description: event.description
+          description: event.description,
+          color: event.color || null
         });
       } else if(event.type === 'tag_delete') {
         removeTag(event.tag_id);

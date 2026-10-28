@@ -1,3 +1,4 @@
+import re
 import os
 import string
 
@@ -86,6 +87,19 @@ def document_name(name):
         raise InvalidFormat(_f("Document name cannot be empty"))
     if len(name) > 50:
         raise InvalidFormat(_f("Document name is too long"))
+    return True
+
+
+_color_re = re.compile(r'^#[0-9a-fA-F]{6}$')
+
+
+def tag_color(color):
+    if color is None:
+        return True
+    if not isinstance(color, str):
+        raise ValueError("Tag color is not a string")
+    if not _color_re.match(color):
+        raise InvalidFormat(_f("Invalid tag color"))
     return True
 
 

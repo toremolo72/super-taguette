@@ -322,14 +322,18 @@ def codebook_xml(tags, file):
         for tag in tags:
             guid = uuid.uuid5(TAGUETTE_NAMESPACE, tag.path)
             guid = str(guid).upper()
+            attrs = {(None, 'guid'): guid,
+                     (None, 'name'): tag.path,
+                     (None, 'isCodable'): 'true'}
+            qnames = {(None, 'guid'): 'guid',
+                      (None, 'name'): 'name',
+                      (None, 'isCodable'): 'isCodable'}
+            if tag.color:
+                attrs[(None, 'color')] = tag.color
+                qnames[(None, 'color')] = 'color'
             output.startElementNS(
                 (None, 'Code'), 'Code',
-                AttributesNSImpl({(None, 'guid'): guid,
-                                  (None, 'name'): tag.path,
-                                  (None, 'isCodable'): 'true'},
-                                 {(None, 'guid'): 'guid',
-                                  (None, 'name'): 'name',
-                                  (None, 'isCodable'): 'isCodable'}),
+                AttributesNSImpl(attrs, qnames),
             )
             output.endElementNS((None, 'Code'), 'Code')
         output.endElementNS((None, 'Codes'), 'Codes')
@@ -355,6 +359,7 @@ def codebook_csv(tags, file):
         writer.writerow([
             'tag',
             'description',
+            'color',
             'number of highlights',
             'number of documents',
         ])
@@ -362,6 +367,7 @@ def codebook_csv(tags, file):
             writer.writerow([
                 tag.path,
                 tag.description,
+                tag.color or '',
                 tag.highlights_count,
                 tag.documents_count,
             ])
@@ -378,15 +384,17 @@ def codebook_xlsx(tags, filename):
 
     sheet.write(0, 0, 'tag', header)
     sheet.write(0, 1, 'description', header)
-    sheet.write(0, 2, 'number of highlights', header)
-    sheet.write(0, 3, 'number of documents', header)
+    sheet.write(0, 2, 'color', header)
+    sheet.write(0, 3, 'number of highlights', header)
+    sheet.write(0, 4, 'number of documents', header)
     sheet.set_column(0, 0, 30.0)
     sheet.set_column(1, 1, 80.0)
     for row, tag in enumerate(tags, start=1):
         sheet.write(row, 0, tag.path)
         sheet.write(row, 1, tag.description)
-        sheet.write(row, 2, tag.highlights_count)
-        sheet.write(row, 3, tag.documents_count)
+        sheet.write(row, 2, tag.color or '')
+        sheet.write(row, 3, tag.highlights_count)
+        sheet.write(row, 4, tag.documents_count)
     workbook.close()
 
 

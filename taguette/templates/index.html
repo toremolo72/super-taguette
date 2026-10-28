@@ -6,21 +6,45 @@
 {% if show_messages %}
 <script src="{{ reverse_url('messages.js') }}" async></script>
 {% endif %}
-{% if multiuser %}
-<h1>{% trans user_login=user.login %}Welcome {{ user_login }}{% endtrans %}</h1>
+
+<div class="home-header">
+  <div>
+    {% if multiuser %}
+    <h1 class="home-title">{% trans user_login=user.login %}Welcome {{ user_login }}{% endtrans %}</h1>
+    {% else %}
+    <h1 class="home-title">{% trans %}Welcome!{% endtrans %}</h1>
+    {% endif %}
+    <p class="home-subtitle">{% trans %}Here are your projects:{% endtrans %}</p>
+  </div>
+  <div class="home-actions">
+    <a href="{{ reverse_url('new_project') }}" class="btn btn-primary"><i class="fas fa-plus"></i> {% trans "button in project list" %}Create a new project{% endtrans %}</a>
+    {% if can_import_project -%}
+    <a href="{{ reverse_url('import_project') }}" class="btn btn-outline-primary"><i class="fas fa-file-import"></i> {% trans "button in project list" %}Import a project file{% endtrans %}</a>
+    {%- endif %}
+  </div>
+</div>
+
+<h2 class="home-section-title">{% trans "home page section" %}Existing projects{% endtrans %}</h2>
+
+{% if projects %}
+<div class="project-grid">
+  {% for project in projects %}
+  <a class="project-card" href="{{ reverse_url('project', project.id) }}">
+    <div class="project-card-name">{{ project.name }}</div>
+    {% if project.description %}
+    <div class="project-card-desc">{{ project.description }}</div>
+    {% endif %}
+    <div class="project-card-meta">
+      <span><i class="far fa-file-alt"></i> {{ project.documents | length }} {% trans "project card" %}documents{% endtrans %}</span>
+      <span><i class="fas fa-tag"></i> {{ project.tags | length }} {% trans "project card" %}tags{% endtrans %}</span>
+    </div>
+  </a>
+  {% endfor %}
+</div>
 {% else %}
-<h1>{% trans %}Welcome!{% endtrans %}</h1>
+<div class="project-empty">
+  <p>{% trans %}You have no projects yet.{% endtrans %}</p>
+  <a href="{{ reverse_url('new_project') }}" class="btn btn-primary"><i class="fas fa-plus"></i> {% trans "button in project list" %}Create a new project{% endtrans %}</a>
+</div>
 {% endif %}
-<p>{% trans %}Here are your projects:{% endtrans %}</p>
-<ul class="list-group">
-{% for project in projects %}
-  <li class="list-group-item"><a href="{{ reverse_url('project', project.id) }}">{{ project.name }}</a></li>
-{% else %}
-  <li class="list-group-item disabled" style="font-style: oblique;">{% trans %}You have no projects yet.{% endtrans %}</li>
-{% endfor %}
-  <li class="list-group-item list-group-item-primary" style="font-weight: bold;"><a href="{{ reverse_url('new_project') }}">{% trans "button in project list" %}Create a new project{% endtrans %}</a></li>
-  {% if can_import_project -%}
-  <li class="list-group-item list-group-item-primary" style="font-weight: bold;"><a href="{{ reverse_url('import_project') }}">{% trans "button in project list" %}Import a project file{% endtrans %}</a></li>
-  {%- endif %}
-</ul>
 {% endblock %}

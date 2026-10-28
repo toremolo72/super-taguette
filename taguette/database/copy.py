@@ -81,6 +81,7 @@ def copy_project(
         validators=dict(
             path=validate.tag_path,
             description=validate.description,
+            color=validate.tag_color,
         ),
     )
 
@@ -131,7 +132,13 @@ def copy_project(
             raise ValueError("Command doesn't have expected columns")
 
         # Check that the right JSON fields are set
-        if payload.keys() != expected_payload_fields:
+        # ('color' was added later, so it may be missing from old files)
+        optional_payload_fields = {'color'}
+        if not (
+            expected_payload_fields - optional_payload_fields
+            <= payload.keys()
+            <= expected_payload_fields
+        ):
             raise ValueError("Command doesn't have expected fields")
 
         # Map an ID, using negative ID if it's unknown
@@ -153,6 +160,7 @@ def copy_project(
             ),
             tag_id=lambda v: isinstance(v, int),
             tag_path=validate.tag_path,
+            color=validate.tag_color,
             src_tag_id=lambda v: isinstance(v, int),
             dest_tag_id=lambda v: isinstance(v, int),
             member=validate.user_login,

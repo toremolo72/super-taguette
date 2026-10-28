@@ -5,9 +5,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="Description" content="Free and open source qualitative research tool">
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem('taguette-theme');
+          if(t) document.documentElement.setAttribute('data-theme', t);
+        } catch(e) {}
+      })();
+    </script>
     <link rel="stylesheet" href="{{ static_url('css/custom.css') }}">
     <link rel="stylesheet" href="{{ static_url('css/fa-all.min.css') }}">
     <link rel="stylesheet" href="{{ static_url('css/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ static_url('css/theme.css') }}">
     <title>{% block title %}Taguette{% endblock %}</title>
     <script type="text/javascript">
       var base_path = '{{ base_path }}';
@@ -32,6 +41,20 @@
             {% endif %}
           </ul>
           <ul class="navbar-nav t-ms-auto">
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle theme-toggle" href="#" id="theme-dropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" title="{% trans "navigation item" %}Theme{% endtrans %}"><i class="fas fa-palette"></i> <span class="d-lg-none">{% trans "navigation item" %}Theme{% endtrans %}</span></a>
+              <div class="dropdown-menu dropdown-menu-right theme-menu" aria-labelledby="theme-dropdown">
+                <h6 class="dropdown-header">{% trans "navigation item" %}Theme{% endtrans %}</h6>
+                <a class="dropdown-item" href="#" data-theme-choice="soft-era"><span class="theme-dots"><span style="background:#f9f5f5"></span><span style="background:#b4addf"></span><span style="background:#eeaabe"></span></span>Soft Era</a>
+                <a class="dropdown-item" href="#" data-theme-choice="rose-pine-dawn"><span class="theme-dots"><span style="background:#faf4ed"></span><span style="background:#907aa9"></span><span style="background:#d7827e"></span></span>Rosé Pine Dawn</a>
+                <a class="dropdown-item" href="#" data-theme-choice="catppuccin-latte"><span class="theme-dots"><span style="background:#eff1f5"></span><span style="background:#8839ef"></span><span style="background:#ea76cb"></span></span>Catppuccin Latte</a>
+                <a class="dropdown-item" href="#" data-theme-choice="everforest-light"><span class="theme-dots"><span style="background:#fdf6e3"></span><span style="background:#8da101"></span><span style="background:#f57d26"></span></span>Everforest Light</a>
+                <a class="dropdown-item" href="#" data-theme-choice="nord-light"><span class="theme-dots"><span style="background:#eceff4"></span><span style="background:#5e81ac"></span><span style="background:#bf616a"></span></span>Nord Light</a>
+                <div class="dropdown-divider"></div>
+                <a class="dropdown-item" href="#" data-theme-choice="rose-pine"><span class="theme-dots"><span style="background:#191724"></span><span style="background:#c4a7e7"></span><span style="background:#eb6f92"></span></span>Rosé Pine (dark)</a>
+                <a class="dropdown-item" href="#" data-theme-choice="catppuccin-mocha"><span class="theme-dots"><span style="background:#1e1e2e"></span><span style="background:#cba6f7"></span><span style="background:#f38ba8"></span></span>Catppuccin Mocha (dark)</a>
+              </div>
+            </li>
             <li class="nav-item">
               {% set external_icon %}<i class="fas fa-external-link-alt"></i>{% endset %}
               <a class="nav-link" href="https://www.taguette.org/getting-started.html" target="_blank" rel="noopener">{% trans "navigation item" %}Taguette Guide {{ external_icon }}{% endtrans %}</a>
@@ -77,6 +100,32 @@
 
     <script src="{{ static_url('js/jquery-3.7.1.min.js') }}"></script>
     <script src="{{ static_url('js/bootstrap.bundle.min.js') }}"></script>
+    <script>
+      (function() {
+        var items = document.querySelectorAll('[data-theme-choice]');
+        function mark() {
+          var current = document.documentElement.getAttribute('data-theme') || 'soft-era';
+          for(var i = 0; i < items.length; ++i) {
+            items[i].classList.toggle('active', items[i].getAttribute('data-theme-choice') === current);
+          }
+        }
+        for(var i = 0; i < items.length; ++i) {
+          items[i].addEventListener('click', function(e) {
+            e.preventDefault();
+            var t = this.getAttribute('data-theme-choice');
+            if(t === 'soft-era') {
+              document.documentElement.removeAttribute('data-theme');
+            } else {
+              document.documentElement.setAttribute('data-theme', t);
+            }
+            try { localStorage.setItem('taguette-theme', t); } catch(err) {}
+            mark();
+            document.dispatchEvent(new CustomEvent('taguette-theme-changed', {detail: t}));
+          });
+        }
+        mark();
+      })();
+    </script>
 
     {% block morejs %}
     {% endblock %}

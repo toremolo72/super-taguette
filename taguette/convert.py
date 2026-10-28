@@ -463,6 +463,23 @@ async def wvware_to_html(input_filename, tmp, config):
 HTML_MIMETYPES = {'text/html', 'application/xhtml+xml'}
 
 
+def plaintext_to_html(text):
+    """Turn plain text into simple HTML: blank lines separate paragraphs,
+    single line breaks become <br>.
+    """
+    import html as html_mod
+
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+    paragraphs = []
+    for para in text.split('\n\n'):
+        para = para.strip('\n')
+        if not para.strip():
+            continue
+        lines = [html_mod.escape(line) for line in para.split('\n')]
+        paragraphs.append('<p>' + '<br>\n'.join(lines) + '</p>')
+    return get_html_body('\n'.join(paragraphs))
+
+
 async def to_html(body, content_type, filename, config):
     logger.info("Converting file %r, type %r", filename, content_type)
 
@@ -471,6 +488,14 @@ async def to_html(body, content_type, filename, config):
         return get_html_body(body)
     elif not ext:
         raise ConversionError("This file doesn't have an extension!")
+    elif ext in ('.txt', '.md'):
+        # Plain text: convert directly, no need for Calibre
+        charset = chardet.detect(body)['encoding'] or 'utf-8'
+        try:
+            text = body.decode(charset)
+        except (UnicodeDecodeError, LookupError):
+            text = body.decode('utf-8', 'replace')
+        return plaintext_to_html(text)
     elif ext == '.doc':
         # Convert file to HTML using WV
         tmp = tempfile.mkdtemp(prefix='taguette_wv_')
