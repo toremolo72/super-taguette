@@ -177,3 +177,35 @@ msgstr "タグをクリックでハイライト · Escで取消"
 #: taguette/static/js/taguette.js
 msgid "Delete highlight"
 msgstr "ハイライトを削除"
+
+#: taguette/static/js/taguette.js
+msgid "(top level)"
+msgstr "（なし・トップレベル）"
+
+#: taguette/static/js/taguette.js
+msgid "including sub-tags"
+msgstr "サブタグを含む"
+
+#: taguette/static/js/taguette.js
+msgid "No tag with this name; only sub-tags exist"
+msgstr "この名前のタグ自体はなく、サブタグだけがあります"
+
+#: taguette/static/js/taguette.js
+msgid "A tag named '%(tag)s' already exists there"
+msgstr "移動先に '%(tag)s' という名前のタグがすでにあります"
+
+#: taguette/static/js/taguette.js
+msgid "Couldn't move tag!"
+msgstr "タグを移動できませんでした！"
+
+#: taguette/static/js/taguette.js
+msgid "Saving…"
+msgstr "保存中…"
+
+#: taguette/static/js/taguette.js
+msgid "Saved"
+msgstr "保存しました"
+
+#: taguette/static/js/taguette.js
+msgid "Error"
+msgstr "エラー"

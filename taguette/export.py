@@ -85,6 +85,7 @@ def _get_highlights_for_export(db, project_id, path):
             sqlalchemy.select([
                 t_highlight.c.id,
                 t_highlight.c.snippet,
+                t_highlight.c.memo,
                 t_document.c.name,
                 t_tag.c.path,
             ])
@@ -111,7 +112,10 @@ def _get_highlights_for_export(db, project_id, path):
                     t_document.c.id == t_highlight.c.document_id,
                 )
             )
-            .where(t_tag_m.c.path.startswith(path, autoescape=True))
+            .where(sqlalchemy.or_(
+                t_tag_m.c.path == path,
+                t_tag_m.c.path.startswith(path + '.', autoescape=True),
+            ))
             .where(t_document.c.project_id == project_id)
             .order_by(
                 t_highlight.c.document_id,
@@ -131,16 +135,17 @@ def _get_highlights_for_export(db, project_id, path):
             sqlalchemy.select([
                 t_highlight.c.id,
                 t_highlight.c.snippet,
+                t_highlight.c.memo,
                 t_document.c.name,
                 t_tag.c.path,
             ])
             .select_from(
                 t_highlight
-                .join(
+                .outerjoin(
                     t_highlight_tag,
                     t_highlight.c.id == t_highlight_tag.c.highlight_id,
                 )
-                .join(
+                .outerjoin(
                     t_tag,
                     t_tag.c.id == t_highlight_tag.c.tag_id,
                 )
@@ -159,7 +164,7 @@ def _get_highlights_for_export(db, project_id, path):
 
     highlights = []
     for row in db.execute(query).fetchall():
-        highlight_id, snippet, document, tag_path = row
+        highlight_id, snippet, memo, document, tag_path = row
         if highlights and highlights[-1][0] == highlight_id:
             highlights[-1][3].append(tag_path)
         else:
@@ -168,6 +173,7 @@ def _get_highlights_for_export(db, project_id, path):
                 snippet,
                 document,
                 [] if tag_path is None else [tag_path],
+                memo or '',
             ))
 
     return highlights
@@ -188,14 +194,15 @@ def highlights_csv(db, project_id, path, file):
     """
     highlights = _get_highlights_for_export(db, project_id, path)
     writer = csv.writer(file)
-    writer.writerow(['id', 'document', 'tag', 'content'])
-    for id, snippet, document, tags in highlights:
+    writer.writerow(['id', 'document', 'tag', 'content', 'memo'])
+    for id, snippet, document, tags, memo in highlights:
         if not tags:
             tags = ['']
         for tag_path in tags:
             writer.writerow([
                 id, document, tag_path,
                 convert.html_to_plaintext(snippet),
+                memo,
             ])
 
 
@@ -214,12 +221,14 @@ def highlights_xslx(db, project_id, path, filename):
     sheet.write(0, 1, 'document', header)
     sheet.write(0, 2, 'tag', header)
     sheet.write(0, 3, 'content', header)
+    sheet.write(0, 4, 'memo', header)
     sheet.set_column(0, 0, 5.0)
     sheet.set_column(1, 1, 15.0)
     sheet.set_column(2, 2, 15.0)
     sheet.set_column(3, 3, 80.0)
+    sheet.set_column(4, 4, 40.0)
     row = 1
-    for id, snippet, document, tags in highlights:
+    for id, snippet, document, tags, memo in highlights:
         if not tags:
             tags = ['']
         for tag_path in tags:
@@ -227,6 +236,7 @@ def highlights_xslx(db, project_id, path, filename):
             sheet.write(row, 1, document)
             sheet.write(row, 2, tag_path)
             sheet.write(row, 3, convert.html_to_plaintext(snippet))
+            sheet.write(row, 4, memo)
             row += 1
     workbook.close()
 

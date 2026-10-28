@@ -455,6 +455,16 @@ function themeAccent(alpha) {
   return 'rgba(180, 173, 223, ' + alpha + ')';
 }
 
+// "a.b.c" -> '<span class="tag-parent">a › b › </span>c' (or just "c" when full=false)
+function tagPathHtml(path, full) {
+  var parent = tagParentPath(path);
+  var leaf = tagLeafName(path);
+  if(!parent || !full) {
+    return escapeHtml(leaf);
+  }
+  return '<span class="tag-parent">' + escapeHtml(parent.split(TAG_SEP).join(' \u203a ')) + ' \u203a </span>' + escapeHtml(leaf);
+}
+
 function hexToRgba(hex, alpha) {
   var r = parseInt(hex.substring(1, 3), 16);
   var g = parseInt(hex.substring(3, 5), 16);
@@ -468,14 +478,56 @@ function autoTagColor(tag_id, alpha) {
   return 'hsla(' + hue.toFixed(1) + ', 60%, 70%, ' + alpha + ')';
 }
 
-// Color of a tag: the one chosen by the user, or an automatic one
+/*
+ * Tag hierarchy helpers. Tags are hierarchical through their path:
+ * "interview.positive" is a child of "interview".
+ */
+var TAG_SEP = '.';
+
+function tagParentPath(path) {
+  var i = path.lastIndexOf(TAG_SEP);
+  return i === -1 ? '' : path.substring(0, i);
+}
+function tagLeafName(path) {
+  var i = path.lastIndexOf(TAG_SEP);
+  return i === -1 ? path : path.substring(i + 1);
+}
+function tagDepth(path) {
+  return path.split(TAG_SEP).length - 1;
+}
+function tagByPath(path) {
+  var entries = Object.values(tags);
+  for(var i = 0; i < entries.length; ++i) {
+    if(entries[i].path === path) return entries[i];
+  }
+  return null;
+}
+function tagIsDescendant(path, ancestor_path) {
+  return path.indexOf(ancestor_path + TAG_SEP) === 0;
+}
+// Nearest ancestor (or the tag itself) that has an explicit color
+function tagEffectiveColorSource(tag) {
+  var path = tag.path;
+  var t = tag;
+  while(true) {
+    if(t && t.color) return t;
+    if(!path) return null;
+    path = tagParentPath(path);
+    t = path ? tagByPath(path) : null;
+  }
+}
+
+// Color of a tag: its own, else inherited from a parent, else automatic
 function tagColor(tag_id, alpha) {
   if(tag_id === null || tag_id === undefined) {
     return 'rgba(170, 170, 180, ' + alpha + ')';
   }
   var tag = tags['' + tag_id];
-  if(tag && tag.color) {
-    return hexToRgba(tag.color, alpha);
+  if(tag) {
+    var src = tagEffectiveColorSource(tag);
+    if(src) {
+      return hexToRgba(src.color, alpha);
+    }
   }
   return autoTagColor(tag_id, alpha);
 }
@@ -492,6 +544,7 @@ function highlightSelection(saved, id, clickedCallback, title, color) {
   end = splitAtPos(end, true);
 
   var node = start;
+  var last_span = null;
   while(node != end) {
     var next = nextElement(node);
     if(node.nodeType == 3 // TEXT_NODE
@@ -507,9 +560,14 @@ function highlightSelection(saved, id, clickedCallback, title, color) {
       span.addEventListener('click', clickedCallback);
       node.parentNode.insertBefore(span, node);
       span.appendChild(node);
+      last_span = span;
     }
     node = next;
   }
+  if(last_span !== null) {
+    last_span.classList.add('highlight-end');
+  }
+  return last_span;
 }
 
 
@@ -891,6 +949,98 @@ function mergeTags(tag_src, tag_dest) {
   updateTagsList();
 }
 
+// Collapsed state of the tag tree, remembered per project
+var tag_tree_collapsed = {};
+try {
+  tag_tree_collapsed = JSON.parse(localStorage.getItem('taguette-tagtree-' + project_id) || '{}');
+} catch(e) { tag_tree_collapsed = {}; }
+function saveTagTreeState() {
+  try {
+    localStorage.setItem('taguette-tagtree-' + project_id, JSON.stringify(tag_tree_collapsed));
+  } catch(e) {}
+}
+
+// Move a tag (and its sub-tags) under a new parent path ('' = top level)
+function moveTag(tag, new_parent_path) {
+  var new_path = new_parent_path ? new_parent_path + TAG_SEP + tagLeafName(tag.path) : tagLeafName(tag.path);
+  if(new_path === tag.path) return;
+  if(new_parent_path === tag.path || tagIsDescendant(new_parent_path, tag.path)) {
+    return;  // can't move under itself
+  }
+  if(tagByPath(new_path)) {
+    alert(gettext("A tag named '%(tag)s' already exists there", {tag: new_path}));
+    return;
+  }
+  showSpinner();
+  postJSON('/api/project/' + project_id + '/tag/' + tag.id, {path: new_path})
+  .catch(function(error) {
+    console.error("Failed to move tag:", error);
+    alert(gettext("Couldn't move tag!") + "\n\n" + error);
+  })
+  .then(hideSpinner);
+}
+
+var dragged_tag_id = null;
+
+function setupTagDrag(elem, tag) {
+  if(tag) {
+    elem.setAttribute('draggable', 'true');
+    elem.addEventListener('dragstart', function(e) {
+      dragged_tag_id = tag.id;
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', tag.path); } catch(err) {}
+      elem.classList.add('tag-dragging');
+      document.getElementById('tag-drop-top').classList.add('visible');
+    });
+    elem.addEventListener('dragend', function() {
+      dragged_tag_id = null;
+      elem.classList.remove('tag-dragging');
+      document.getElementById('tag-drop-top').classList.remove('visible');
+      var over = document.getElementsByClassName('tag-dragover');
+      while(over.length) over[0].classList.remove('tag-dragover');
+    });
+  }
+  // Any row (real or virtual) can be a drop target
+  elem.addEventListener('dragover', function(e) {
+    if(dragged_tag_id === null) return;
+    var target_path = elem.getAttribute('data-tag-path');
+    var src = tags['' + dragged_tag_id];
+    if(!src || target_path === src.path || tagIsDescendant(target_path, src.path)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    elem.classList.add('tag-dragover');
+  });
+  elem.addEventListener('dragleave', function() {
+    elem.classList.remove('tag-dragover');
+  });
+  elem.addEventListener('drop', function(e) {
+    if(dragged_tag_id === null) return;
+    e.preventDefault();
+    elem.classList.remove('tag-dragover');
+    var src = tags['' + dragged_tag_id];
+    if(src) moveTag(src, elem.getAttribute('data-tag-path'));
+  });
+}
+
+// Drop zone to move a tag back to the top level
+(function() {
+  var zone = document.getElementById('tag-drop-top');
+  zone.addEventListener('dragover', function(e) {
+    if(dragged_tag_id === null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    zone.classList.add('tag-dragover');
+  });
+  zone.addEventListener('dragleave', function() { zone.classList.remove('tag-dragover'); });
+  zone.addEventListener('drop', function(e) {
+    if(dragged_tag_id === null) return;
+    e.preventDefault();
+    zone.classList.remove('tag-dragover');
+    var src = tags['' + dragged_tag_id];
+    if(src) moveTag(src, '');
+  });
+})();
+
 function updateTagsList() {
   var entries = Object.entries(tags);
   var isReverse = sortTags[1] == 'desc';
@@ -907,30 +1057,102 @@ function updateTagsList() {
     }
     tags_list.removeChild(first);
   }
-  // Fill up the list again
-  // TODO: Show this as a tree
-  var tree = {};
+  // Fill up the list again, as a tree
   var before = tags_list.firstChild;
+
+  // Build the tree: node = {path, tag|null, children: {name: node}}
+  var root = {path: '', tag: null, children: {}};
+  function nodeFor(path) {
+    if(!path) return root;
+    var parts = path.split(TAG_SEP);
+    var node = root;
+    var acc = '';
+    for(var i = 0; i < parts.length; ++i) {
+      acc = acc ? acc + TAG_SEP + parts[i] : parts[i];
+      if(!node.children[parts[i]]) {
+        node.children[parts[i]] = {path: acc, tag: null, children: {}};
+      }
+      node = node.children[parts[i]];
+    }
+    return node;
+  }
   for(var i = 0; i < entries.length; ++i) {
-    var tag = entries[i][1];
+    nodeFor(entries[i][1].path).tag = entries[i][1];
+  }
+  function subtreeCount(node) {
+    var n = node.tag ? node.tag.count : 0;
+    var kids = Object.values(node.children);
+    for(var i = 0; i < kids.length; ++i) n += subtreeCount(kids[i]);
+    return n;
+  }
+  function sortedChildren(node) {
+    var kids = Object.values(node.children);
+    sortByKey(kids, function(k) {
+      return sortTags[0] === 'count' ? subtreeCount(k) : tagLeafName(k.path);
+    }, isReverse);
+    return kids;
+  }
+
+  function renderNode(node, depth) {
+    var kids = sortedChildren(node);
+    var has_kids = kids.length > 0;
+    var collapsed = has_kids && tag_tree_collapsed[node.path];
+    var tag = node.tag;
     var elem = document.createElement('li');
-    elem.className = 'list-group-item';
-    if(current_tag !== null && tag.path.substr(0, current_tag.length) == current_tag) {
+    elem.className = 'list-group-item tag-row' + (tag ? '' : ' tag-row-virtual');
+    elem.style.paddingLeft = (0.75 + depth * 1.1) + 'rem';
+    elem.setAttribute('data-tag-path', node.path);
+    if(tag) elem.setAttribute('data-tag-id', tag.id);
+    if(current_tag !== null && current_tag !== '' && tag
+     && (tag.path === current_tag || tagIsDescendant(tag.path, current_tag))) {
       elem.classList.add('tag-current');
+    }
+    var own = tag ? tag.count : 0;
+    var total = subtreeCount(node);
+    var countHtml = tag
+      ? '<span class="badge badge-secondary badge-pill" id="tag-' + tag.id + '-count" title="' + total + '">' + own + '</span>'
+      : '';
+    if(has_kids) {
+      countHtml += '<span class="tag-subcount" data-subcount-path="' + escapeHtml(node.path) + '" title="' + gettext("including sub-tags") + '">' + total + '</span>';
     }
     elem.innerHTML =
       '<div class="d-flex justify-content-between align-items-center">' +
       '  <div class="tag-name">' +
-      '    <span class="tag-swatch" style="background-color: ' + tagColor(tag.id, 0.8) + ';"></span>' +
-      '    <a id="tag-link-' + tag.id + '">' + escapeHtml(tag.path) + '</a>' +
+      '    <a href="javascript:void(0)" class="tag-chevron' + (has_kids ? '' : ' tag-chevron-empty') + (collapsed ? ' collapsed' : '') + '"><i class="fas fa-chevron-down"></i></a>' +
+      '    <span class="tag-swatch" style="background-color: ' + (tag ? tagColor(tag.id, 0.8) : 'transparent') + ';' + (tag ? '' : ' border-style: dashed;') + '"></span>' +
+      (tag
+        ? '    <a id="tag-link-' + tag.id + '">' + escapeHtml(tagLeafName(tag.path)) + '</a>'
+        : '    <span class="tag-virtual-name" title="' + gettext("No tag with this name; only sub-tags exist") + '">' + escapeHtml(tagLeafName(node.path)) + '</span>') +
       '  </div>' +
-      '  <div style="white-space: nowrap;">' +
-      '    <span class="badge badge-secondary badge-pill" id="tag-' + tag.id + '-count">' + tag.count + '</span>' +
-      '    <a href="javascript:editTag(' + tag.id + ');" class="btn btn-primary btn-sm">' + gettext("Edit") + '</a>' +
+      '  <div class="tag-row-actions">' + countHtml +
+      (tag ? '    <a href="javascript:editTag(' + tag.id + ');" class="btn btn-primary btn-sm">' + gettext("Edit") + '</a>' : '') +
       '  </div>' +
       '</div>';
     tags_list.insertBefore(elem, before);
-    linkTag(document.getElementById('tag-link-' + tag.id), tag.path);
+    if(tag) {
+      linkTag(document.getElementById('tag-link-' + tag.id), tag.path);
+      setupTagDrag(elem, tag);
+    } else {
+      setupTagDrag(elem, null);
+    }
+    if(has_kids) {
+      elem.querySelector('.tag-chevron').addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        tag_tree_collapsed[node.path] = !tag_tree_collapsed[node.path];
+        saveTagTreeState();
+        updateTagsList();
+      });
+    }
+    if(!collapsed) {
+      for(var i = 0; i < kids.length; ++i) {
+        renderNode(kids[i], depth + 1);
+      }
+    }
+  }
+  var top = sortedChildren(root);
+  for(var i = 0; i < top.length; ++i) {
+    renderNode(top[i], 0);
   }
   if(entries.length == 0) {
     var elem = document.createElement('div');
@@ -1015,7 +1237,7 @@ function updateModalTagsList() {
       '<input type="checkbox" class="form-check-input" value="' + tag.id + '" name="highlight-add-tags" id="highlight-add-tags-' + tag.id + '" />' +
       '<label for="highlight-add-tags-' + tag.id + '" class="form-check-label ">' +
       '<span class="tag-swatch" style="background-color: ' + tagColor(tag.id, 0.9) + ';"></span>' +
-      escapeHtml(tag.path) + '</label>';
+      tagPathHtml(tag.path, true) + '</label>';
     tags_modal_list.insertBefore(elem, before);
   }
   if(entries.length == 0) {
@@ -1057,17 +1279,40 @@ highlightSearch.addEventListener('keypress', function(e) {
 });
 
 function highlightModalReset() {
+  document.getElementById('highlight-add-memo').value = '';
   document.getElementById('highlight-add-form').reset();
   updateModalTagsList();
 }
 
 updateTagsList();
 
+function tagSubtreeCount(path) {
+  var n = 0;
+  var entries = Object.values(tags);
+  for(var i = 0; i < entries.length; ++i) {
+    if(entries[i].path === path || tagIsDescendant(entries[i].path, path)) {
+      n += entries[i].count;
+    }
+  }
+  return n;
+}
+
 function updateTagCount(id, delta) {
   var tag = tags['' + id];
   tag.count += delta;
   var elem = document.getElementById('tag-' + id + '-count');
-  elem.textContent = tag.count;
+  if(elem) {
+    elem.textContent = tag.count;
+  }
+  // Refresh the subtree totals of this tag and its ancestors
+  var path = tag.path;
+  while(path) {
+    var sub = document.querySelector('.tag-subcount[data-subcount-path="' + CSS.escape(path) + '"]');
+    if(sub) {
+      sub.textContent = tagSubtreeCount(path);
+    }
+    path = tagParentPath(path);
+  }
 }
 
 var tag_add_modal = document.getElementById('tag-add-modal');
@@ -1129,9 +1374,42 @@ $(tag_add_modal).on('shown.bs.modal', function() {
   document.getElementById('tag-add-path').focus();
 });
 
-function createTag() {
+var tag_parent_select = document.getElementById('tag-add-parent');
+
+// Fill the "parent tag" dropdown (excluding the tag being edited and its sub-tags)
+function fillTagParentSelect(exclude_tag, selected_path) {
+  while(tag_parent_select.firstChild) {
+    tag_parent_select.removeChild(tag_parent_select.firstChild);
+  }
+  var none = document.createElement('option');
+  none.value = '';
+  none.textContent = gettext("(top level)");
+  tag_parent_select.appendChild(none);
+  var entries = Object.values(tags);
+  sortByKey(entries, function(t) { return t.path; });
+  for(var i = 0; i < entries.length; ++i) {
+    var t = entries[i];
+    if(exclude_tag && (t.id === exclude_tag.id || tagIsDescendant(t.path, exclude_tag.path))) continue;
+    var opt = document.createElement('option');
+    opt.value = t.path;
+    opt.textContent = '\u00a0\u00a0'.repeat(tagDepth(t.path)) + tagLeafName(t.path);
+    tag_parent_select.appendChild(opt);
+  }
+  tag_parent_select.value = selected_path || '';
+  if(tag_parent_select.value !== (selected_path || '')) {
+    // Parent exists only virtually (no tag with that exact path): add it
+    var opt = document.createElement('option');
+    opt.value = selected_path;
+    opt.textContent = selected_path;
+    tag_parent_select.appendChild(opt);
+    tag_parent_select.value = selected_path;
+  }
+}
+
+function createTag(parent_path) {
   document.getElementById('tag-add-form').reset();
   document.getElementById('tag-add-id').value = '';
+  fillTagParentSelect(null, parent_path || (current_tag && tagByPath(current_tag) ? current_tag : ''));
   setTagEditorColor('');
   document.getElementById('tag-add-label-new').style.display = '';
   document.getElementById('tag-add-label-change').style.display = 'none';
@@ -1144,7 +1422,8 @@ function createTag() {
 function editTag(tag_id) {
   document.getElementById('tag-add-form').reset();
   document.getElementById('tag-add-id').value = '' + tag_id;
-  document.getElementById('tag-add-path').value = tags['' + tag_id].path;
+  document.getElementById('tag-add-path').value = tagLeafName(tags['' + tag_id].path);
+  fillTagParentSelect(tags['' + tag_id], tagParentPath(tags['' + tag_id].path));
   document.getElementById('tag-add-description').value = tags['' + tag_id].description;
   setTagEditorColor(tags['' + tag_id].color || '');
   document.getElementById('tag-add-label-new').style.display = 'none';
@@ -1165,10 +1444,13 @@ document.getElementById('tag-add-form').addEventListener('submit', function(e) {
   } else {
     tag_id = null;
   }
-  var tag_path = document.getElementById('tag-add-path').value;
+  var tag_path = document.getElementById('tag-add-path').value.trim();
   if(!tag_path) {
     alert(gettext("Invalid tag name"));
     return;
+  }
+  if(tag_parent_select.value) {
+    tag_path = tag_parent_select.value + TAG_SEP + tag_path;
   }
   var req;
   if(tag_id !== null) {
@@ -1318,8 +1600,18 @@ function setHighlight(highlight) {
   sortByKey(hl_tags, function(id) { return tags[id].path; });
   var tag_names = hl_tags.map(function(id) { return tags[id].path; }).join(", ");
   var color = tagColor(hl_tags.length > 0 ? hl_tags[0] : null, 0.55);
+  var title = tag_names;
+  if(highlight.memo) {
+    title = (title ? title + ' \u2014 ' : '') + highlight.memo;
+  }
   try {
-    highlightSelection([highlight.start_offset, highlight.end_offset], id, highlightClicked, tag_names, color);
+    highlightSelection([highlight.start_offset, highlight.end_offset], id, highlightClicked, title, color);
+    if(highlight.memo) {
+      var spans = document.getElementsByClassName('highlight-' + id);
+      for(var i = 0; i < spans.length; ++i) {
+        spans[i].classList.add('has-memo');
+      }
+    }
     console.log("Highlight set:", highlight);
   } catch(error) {
     console.error(
@@ -1540,6 +1832,7 @@ function editHighlightById(id) {
   for(var i = 0; i < hl_tags.length; ++i) {
     document.getElementById('highlight-add-tags-' + hl_tags[i]).checked = true;
   }
+  document.getElementById('highlight-add-memo').value = highlights['' + id].memo || '';
   $(highlight_add_modal).modal().drags({handle: '.modal-header'});
   document.getElementById('highlight-search').focus();
 }
@@ -1560,6 +1853,7 @@ document.getElementById('highlight-add-form').addEventListener('submit', functio
       hl_tags.push(id);
     }
   }
+  var memo = document.getElementById('highlight-add-memo').value.trim() || null;
   var req;
   if(highlight_id) {
     console.log("Posting update for highlight " + highlight_id);
@@ -1567,7 +1861,8 @@ document.getElementById('highlight-add-form').addEventListener('submit', functio
       '/api/project/' + project_id + '/document/' + current_document + '/highlight/' + highlight_id,
       {start_offset: selection[0],
        end_offset: selection[1],
-       tags: hl_tags}
+       tags: hl_tags,
+       memo: memo}
     );
   } else {
     console.log("Posting new highlight");
@@ -1575,7 +1870,8 @@ document.getElementById('highlight-add-form').addEventListener('submit', functio
       '/api/project/' + project_id + '/document/' + current_document + '/highlight/new',
       {start_offset: selection[0],
        end_offset: selection[1],
-       tags: hl_tags}
+       tags: hl_tags,
+       memo: memo}
     );
   }
   showSpinner();
@@ -1636,15 +1932,104 @@ function quickpickRemovePending() {
   }
 }
 
+var quickpick_memo = document.getElementById('quickpick-memo');
+var quickpick_memo_status = document.getElementById('quickpick-memo-status');
+var quickpick_memo_timer = null;
+
 function quickpickClose() {
   if(!quickpick_state) {
     return;
   }
+  quickpickFlushMemo();
   quickpickRemovePending();
   quickpick_state = null;
   quickpick.style.display = 'none';
   quickpick_input.value = '';
+  quickpick_memo.value = '';
+  quickpick_memo_status.textContent = '';
 }
+
+// Save the memo if it changed (debounced while typing, flushed on close)
+function quickpickFlushMemo() {
+  var st = quickpick_state;
+  if(!st) return;
+  if(quickpick_memo_timer !== null) {
+    clearTimeout(quickpick_memo_timer);
+    quickpick_memo_timer = null;
+  }
+  var memo = quickpick_memo.value.trim();
+  if(memo === (st.memo || '')) return;
+  if(st.hl_id === null && !memo) return;
+  quickpickSaveMemo(memo);
+}
+
+function quickpickSaveMemo(memo) {
+  var st = quickpick_state;
+  if(!st) return;
+  if(st.busy) {
+    // Try again shortly
+    quickpick_memo_timer = setTimeout(quickpickFlushMemo, 300);
+    return;
+  }
+  st.busy = true;
+  quickpick_memo_status.textContent = gettext("Saving\u2026");
+  var base = '/api/project/' + project_id + '/document/' + current_document + '/highlight/';
+  var url = st.hl_id !== null ? base + st.hl_id : base + 'new';
+  var body = st.hl_id !== null
+    ? {memo: memo}
+    : {start_offset: st.selection[0], end_offset: st.selection[1], tags: st.tags, memo: memo};
+  postJSON(url, body)
+  .then(function(reply) {
+    st.busy = false;
+    if(quickpick_state !== st) return;
+    if(st.hl_id === null) {
+      st.hl_id = reply.id;
+      quickpickRemovePending();
+    }
+    st.memo = memo;
+    if(highlights['' + st.hl_id]) {
+      highlights['' + st.hl_id].memo = memo || null;
+    }
+    quickpick_memo_status.textContent = gettext("Saved");
+    quickpickRender();
+  })
+  .catch(function(error) {
+    st.busy = false;
+    quickpick_memo_status.textContent = gettext("Error");
+    console.error("Failed to save memo:", error);
+  });
+}
+
+quickpick_memo.addEventListener('input', function() {
+  if(quickpick_memo_timer !== null) clearTimeout(quickpick_memo_timer);
+  quickpick_memo_status.textContent = '';
+  quickpick_memo_timer = setTimeout(quickpickFlushMemo, 700);
+});
+quickpick_memo.addEventListener('keydown', function(e) {
+  if(e.key === 'Escape') {
+    e.preventDefault();
+    quickpickClose();
+  } else if(e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    quickpickFlushMemo();
+  }
+});
+(function() {
+  var chips = quickpick.getElementsByClassName('memo-chip');
+  for(var i = 0; i < chips.length; ++i) {
+    chips[i].addEventListener('mousedown', function(e) { e.preventDefault(); });
+    chips[i].addEventListener('click', function(e) {
+      e.preventDefault();
+      var prefix = this.getAttribute('data-chip') + ' ';
+      if(quickpick_memo.value.indexOf(prefix) !== 0) {
+        quickpick_memo.value = prefix + quickpick_memo.value;
+      }
+      quickpick_memo.focus();
+      quickpick_memo.setSelectionRange(quickpick_memo.value.length, quickpick_memo.value.length);
+      quickpick_memo.dispatchEvent(new Event('input'));
+    });
+  }
+})();
 
 function quickpickPosition(x, y, prefer_above_y) {
   quickpick.style.display = 'block';
@@ -1665,7 +2050,9 @@ function quickpickOpenForSelection(selection, rect) {
     return;  // already open for this selection
   }
   quickpickClose();
-  quickpick_state = {selection: selection, hl_id: null, tags: [], busy: false};
+  quickpick_state = {selection: selection, hl_id: null, tags: [], memo: '', busy: false};
+  quickpick_memo.value = '';
+  quickpick_memo_status.textContent = '';
   // Show the future highlight right away
   highlightSelection(selection, 'pending', function(e) { e.stopPropagation(); }, '', themeAccent(0.4));
   quickpick_active = 0;
@@ -1684,8 +2071,11 @@ function quickpickOpenForHighlight(id, x, y) {
     selection: [hl.start_offset, hl.end_offset],
     hl_id: parseInt(id),
     tags: hl.tags.slice(),
+    memo: hl.memo || '',
     busy: false,
   };
+  quickpick_memo.value = hl.memo || '';
+  quickpick_memo_status.textContent = '';
   quickpick_active = 0;
   quickpickRender();
   quickpickPosition(x, y + 12, y);
@@ -1743,7 +2133,7 @@ function quickpickRender() {
     row.innerHTML =
       '<span class="quickpick-check"><i class="fas fa-check"></i></span>' +
       '<span class="tag-swatch" style="background-color: ' + tagColor(tag.id, 0.9) + ';"></span>' +
-      '<span class="quickpick-name">' + escapeHtml(tag.path) + '</span>';
+      '<span class="quickpick-name">' + tagPathHtml(tag.path, true) + '</span>';
     row.addEventListener('mousedown', function(e) { e.preventDefault(); });  // keep input focus
     row.addEventListener('click', function(e) {
       e.preventDefault();
@@ -1821,7 +2211,15 @@ function quickpickSave(tag_ids) {
   st.busy = true;
   var base = '/api/project/' + project_id + '/document/' + current_document + '/highlight/';
   var url = st.hl_id !== null ? base + st.hl_id : base + 'new';
-  postJSON(url, {start_offset: st.selection[0], end_offset: st.selection[1], tags: tag_ids})
+  var body = {start_offset: st.selection[0], end_offset: st.selection[1], tags: tag_ids};
+  if(st.hl_id === null) {
+    var memo = quickpick_memo.value.trim();
+    if(memo) {
+      body.memo = memo;
+      st.memo = memo;
+    }
+  }
+  postJSON(url, body)
   .then(function(reply) {
     if(quickpick_state !== st) return;
     if(st.hl_id === null) {
@@ -2211,6 +2609,12 @@ function loadTag(tag_path, page) {
       elem.className = 'highlight-entry';
       elem.setAttribute('id', 'highlight-entry-' + hl.id);
       elem.appendChild(content);
+      if(hl.memo) {
+        var memo = document.createElement('div');
+        memo.className = 'highlight-memo';
+        memo.textContent = hl.memo;
+        elem.appendChild(memo);
+      }
       elem.appendChild(document.createTextNode(' '));
 
       var doclink = document.createElement('a');
@@ -2444,7 +2848,8 @@ function longPollForEvents() {
             id: event.highlight_id,
             start_offset: event.start_offset,
             end_offset: event.end_offset,
-            tags: event.tags
+            tags: event.tags,
+            memo: event.memo || null
           });
         }
       } else if(event.type === 'highlight_delete') {

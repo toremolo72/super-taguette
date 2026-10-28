@@ -45,6 +45,7 @@
             </div>
           </div>
         </div>
+        <div id="tag-drop-top"><i class="fas fa-level-up-alt"></i> {% trans "tag tree drop zone" %}Drop here to make it a top-level tag{% endtrans %}</div>
         <ul class="list-group list-group-flush" id="tags-list">
           <li class="list-group-item disabled">{% trans %}Loading...{% endtrans %}</li>
         </ul>
@@ -272,6 +273,10 @@
         <div>
           {% trans "label for tag search box in highlight modal" %}Find tags:{% endtrans %} <input id="highlight-search" />
         </div>
+        <div class="form-group">
+          <label for="highlight-add-memo" class="memo-label">{% trans "highlight modal" %}Memo{% endtrans %}</label>
+          <textarea class="form-control" id="highlight-add-memo" rows="3" placeholder="{% trans "highlight modal" %}Question, comment, interpretation…{% endtrans %}"></textarea>
+        </div>
         <div class="container">
           <ul class="list-unstyled" id="highlight-add-tags">
             <li>{% trans %}Loading...{% endtrans %}</li>
@@ -302,6 +307,10 @@
         <input type="hidden" id="tag-add-id" />
         <div class="container">
           <input type="text" class="form-group" id="tag-add-path" name="tag-add-path" placeholder="{% trans "tag change form placeholder" %}Name{% endtrans %}" required />
+          <div class="tag-parent-editor">
+            <label for="tag-add-parent" class="tag-color-label">{% trans "tag change form label" %}Parent tag{% endtrans %}</label>
+            <select id="tag-add-parent" class="form-control form-control-sm"></select>
+          </div>
           <textarea class="form-control" id="tag-add-description" name="tag-add-description" placeholder="{% trans "tag change form placeholder" %}Description{% endtrans %}"></textarea>
           <div class="tag-color-editor">
             <span class="tag-color-label">{% trans "tag change form label" %}Color{% endtrans %}</span>
@@ -385,6 +394,15 @@
   <div id="quickpick-snippet" class="quickpick-snippet"></div>
   <input id="quickpick-search" type="text" autocomplete="off" placeholder="{% trans "quick tag picker" %}Search or create a tag…{% endtrans %}" />
   <div id="quickpick-list" class="quickpick-list"></div>
+  <div class="quickpick-memo">
+    <div class="quickpick-memo-chips">
+      <a href="javascript:void(0)" class="memo-chip" data-chip="❓">{% trans "memo quick prefix" %}❓ Question{% endtrans %}</a>
+      <a href="javascript:void(0)" class="memo-chip" data-chip="⚠️">{% trans "memo quick prefix" %}⚠️ Check{% endtrans %}</a>
+      <a href="javascript:void(0)" class="memo-chip" data-chip="⭐">{% trans "memo quick prefix" %}⭐ Important{% endtrans %}</a>
+    </div>
+    <textarea id="quickpick-memo" rows="2" placeholder="{% trans "quick tag picker" %}Memo, question, comment… (saved automatically){% endtrans %}"></textarea>
+    <span id="quickpick-memo-status" class="quickpick-memo-status"></span>
+  </div>
   <div id="quickpick-footer" class="quickpick-footer"></div>
 </div>
 <div id="hlchooser"></div>

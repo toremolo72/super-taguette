@@ -19,8 +19,11 @@
     {%- else %}
     <h1>{% trans "exported highlights document title" %}Taguette highlights{% endtrans %}</h1>
     {%- endif %}
-{% for id, snippet, document, tags in highlights %}
+{% for id, snippet, document, tags, memo in highlights %}
     {{ snippet |safe }}
+    {%- if memo %}
+    <p><em><strong>{% trans "exported highlight details" %}Memo:{% endtrans %}</strong> {{ memo }}</em></p>
+    {%- endif %}
     <p>
       {% trans "exported highlight details" doc=document %}<strong>Document:</strong> {{ doc }}{% endtrans %}
       <strong>{% trans "exported highlight details" %}Tags:{% endtrans %}</strong>

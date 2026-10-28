@@ -1124,3 +1124,56 @@ msgstr "タグ"
 msgctxt "navigation item"
 msgid "Theme"
 msgstr "テーマ"
+
+#: taguette/web/api.py
+msgid "Cannot move a tag under itself"
+msgstr "タグを自分自身の下には移動できません"
+
+#: taguette/templates/project.html
+msgctxt "tag change form label"
+msgid "Parent tag"
+msgstr "親タグ"
+
+#: taguette/templates/project.html
+msgctxt "tag tree drop zone"
+msgid "Drop here to make it a top-level tag"
+msgstr "ここにドロップでトップレベルに移動"
+
+#: taguette/validate.py
+msgid "Memo is too long"
+msgstr "メモが長すぎます"
+
+#: taguette/templates/project.html
+msgctxt "memo quick prefix"
+msgid "❓ Question"
+msgstr "❓ 疑問"
+
+#: taguette/templates/project.html
+msgctxt "memo quick prefix"
+msgid "⚠️ Check"
+msgstr "⚠️ 要確認"
+
+#: taguette/templates/project.html
+msgctxt "memo quick prefix"
+msgid "⭐ Important"
+msgstr "⭐ 重要"
+
+#: taguette/templates/project.html
+msgctxt "quick tag picker"
+msgid "Memo, question, comment… (saved automatically)"
+msgstr "メモ・疑問点・コメント…（自動保存）"
+
+#: taguette/templates/project.html
+msgctxt "highlight modal"
+msgid "Memo"
+msgstr "メモ"
+
+#: taguette/templates/project.html
+msgctxt "highlight modal"
+msgid "Question, comment, interpretation…"
+msgstr "疑問点・コメント・解釈…"
+
+#: taguette/templates/export_highlights.html
+msgctxt "exported highlight details"
+msgid "Memo:"
+msgstr "メモ:"

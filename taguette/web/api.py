@@ -6,7 +6,7 @@ import logging
 import math
 import os
 import prometheus_client
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 from sqlalchemy.exc import IntegrityError, DatabaseError, NoSuchTableError
 from sqlalchemy.orm import aliased, defer, joinedload
 import tempfile
@@ -195,7 +195,8 @@ class Document(BaseHandler):
                 {'id': hl.id,
                  'start_offset': hl.start_offset,
                  'end_offset': hl.end_offset,
-                 'tags': [t.id for t in hl.tags]}
+                 'tags': [t.id for t in hl.tags],
+                 'memo': hl.memo}
                 for hl in highlights
             ],
         })
@@ -354,9 +355,31 @@ class TagUpdate(BaseHandler):
             if tag is None or tag.project_id != project.id:
                 return self.send_error_json(404, self.gettext("No such tag"))
             if obj:
+                descendants = []
                 if 'path' in obj:
                     validate.tag_path(obj['path'])
-                    tag.path = obj['path']
+                    old_path = tag.path
+                    new_path = obj['path']
+                    if new_path != old_path:
+                        # Moving a tag under itself makes no sense
+                        if new_path.startswith(old_path + '.'):
+                            return self.send_error_json(
+                                400,
+                                self.gettext("Cannot move a tag under itself"),
+                            )
+                        # Rename all descendants too ("a.b" -> "c.b")
+                        descendants = (
+                            self.db.query(database.Tag)
+                            .filter(database.Tag.project_id == project.id)
+                            .filter(database.Tag.path.startswith(
+                                old_path + '.', autoescape=True,
+                            ))
+                            .all()
+                        )
+                        for child in descendants:
+                            child.path = new_path + child.path[len(old_path):]
+                            validate.tag_path(child.path)
+                    tag.path = new_path
                 if 'description' in obj:
                     validate.description(obj['description'])
                     tag.description = obj['description']
@@ -364,18 +387,20 @@ class TagUpdate(BaseHandler):
                     color = obj['color'] or None
                     validate.tag_color(color)
                     tag.color = color
-                cmd = database.Command.tag_add(
-                    self.current_user,
-                    tag,
-                )
+                cmds = [
+                    database.Command.tag_add(self.current_user, t)
+                    for t in [tag] + descendants
+                ]
                 try:
-                    self.db.add(cmd)
+                    for cmd in cmds:
+                        self.db.add(cmd)
                     self.db.commit()
                 except IntegrityError:
                     self.db.rollback()
                     return self.send_error_json(409, "Conflict")
-                self.db.refresh(cmd)
-                self.application.notify_project(project.id, cmd)
+                for cmd in cmds:
+                    self.db.refresh(cmd)
+                    self.application.notify_project(project.id, cmd)
 
             return self.send_json({'id': tag.id})
         except validate.InvalidFormat as e:
@@ -486,11 +511,17 @@ class HighlightAdd(BaseHandler):
         snippet = extract.extract(document.contents, start, end)
         if all(c in '\r\n\t' for c in snippet):
             return self.send_error_json(400, self.gettext("Empty highlight"))
+        memo = obj.get('memo') or None
+        try:
+            validate.memo(memo)
+        except validate.InvalidFormat as e:
+            return self.send_error_json(400, self.gettext(e.message))
 
         hl = database.Highlight(document=document,
                                 start_offset=start,
                                 end_offset=end,
-                                snippet=snippet)
+                                snippet=snippet,
+                                memo=memo)
         self.db.add(hl)
         self.db.flush()  # Need to flush to get hl.id
 
@@ -537,6 +568,13 @@ class HighlightUpdate(BaseHandler):
                 hl.start_offset = obj['start_offset']
             if 'end_offset' in obj:
                 hl.end_offset = obj['end_offset']
+            if 'memo' in obj:
+                memo = obj['memo'] or None
+                try:
+                    validate.memo(memo)
+                except validate.InvalidFormat as e:
+                    return self.send_error_json(400, self.gettext(e.message))
+                hl.memo = memo
             if 'tags' in obj:
                 # Obtain old tags from database
                 old_tags = set(
@@ -664,7 +702,10 @@ class Highlights(BaseHandler):
                 .join(hltag, hltag.c.highlight_id == database.Highlight.id)
                 .join(tag, hltag.c.tag_id == tag.id)
                 .join(document, document.id == database.Highlight.document_id)
-                .filter(tag.path.startswith(path, autoescape=True))
+                .filter(or_(
+                    tag.path == path,
+                    tag.path.startswith(path + '.', autoescape=True),
+                ))
                 .filter(tag.project == project)
                 .order_by(database.Highlight.document_id,
                           database.Highlight.start_offset)
@@ -697,6 +738,7 @@ class Highlights(BaseHandler):
                     'document_id': hl.document_id,
                     'content': hl.snippet,
                     'tags': [t.id for t in hl.tags],
+                    'memo': hl.memo,
                     'text_direction': direction.name,
                 }
                 for hl, direction in highlights

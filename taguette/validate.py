@@ -93,6 +93,16 @@ def document_name(name):
 _color_re = re.compile(r'^#[0-9a-fA-F]{6}$')
 
 
+def memo(text):
+    if text is None:
+        return True
+    if not isinstance(text, str):
+        raise ValueError("Memo is not a string")
+    if len(text) > 102400:
+        raise InvalidFormat(_f("Memo is too long"))
+    return True
+
+
 def tag_color(color):
     if color is None:
         return True
