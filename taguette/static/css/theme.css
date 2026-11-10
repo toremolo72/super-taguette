@@ -1382,3 +1382,249 @@ li.tag-current {
   margin-right: 0.3em;
   accent-color: var(--se-purple);
 }
+
+/* ---------- Document memo box ---------- */
+
+#document-memo-box {
+  margin: -1.2em 0 1.4em;
+  border: 1px dashed var(--se-yellow);
+  border-radius: var(--se-radius-sm);
+  background-color: color-mix(in srgb, var(--se-yellow) 12%, var(--se-surface));
+}
+.container-body a.document-memo-toggle,
+.document-memo-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.5rem 0.9rem;
+  color: var(--se-text);
+  font-size: 0.88em;
+  text-decoration: none !important;
+}
+.document-memo-toggle .fa-sticky-note {
+  color: var(--se-yellow);
+}
+.document-memo-chevron {
+  margin-left: auto;
+  font-size: 0.75em;
+  transition: transform .15s;
+}
+#document-memo-box:not(.open) .document-memo-chevron {
+  transform: rotate(-90deg);
+}
+#document-memo-body {
+  display: none;
+  position: relative;
+  padding: 0 0.9rem 0.8rem;
+}
+#document-memo-box.open #document-memo-body {
+  display: block;
+}
+#document-memo {
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.95em;
+  line-height: 1.6;
+  resize: vertical;
+  background-color: var(--se-surface-2);
+}
+#document-memo-box .quickpick-memo-status {
+  right: 1.2rem;
+  bottom: 1rem;
+}
+
+/* ---------- Sticky notes in the margin ---------- */
+
+.document-view.has-notes {
+  padding-right: 18rem;
+}
+#sticky-notes {
+  position: absolute;
+  top: 0;
+  right: 1rem;
+  width: 15.5rem;
+  pointer-events: none;
+}
+.sticky-note {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  pointer-events: auto;
+  padding: 0.5rem 0.7rem 0.55rem;
+  font-size: 0.82em;
+  line-height: 1.5;
+  color: var(--se-text-strong);
+  background-color: color-mix(in srgb, var(--se-yellow) 28%, var(--se-surface));
+  border-left: 4px solid var(--se-yellow);
+  border-radius: 3px 8px 8px 3px;
+  box-shadow: 0 3px 10px rgba(var(--se-shadow), 0.14);
+  cursor: pointer;
+  white-space: pre-wrap;
+  word-break: break-word;
+  transition: transform .1s, box-shadow .1s;
+}
+.sticky-note:hover {
+  transform: translateX(-3px);
+  box-shadow: 0 6px 16px rgba(var(--se-shadow), 0.2);
+}
+.sticky-note.sticky-coded {
+  background-color: var(--se-surface-2);
+}
+.sticky-tags {
+  font-size: 0.85em;
+  color: var(--se-text-muted);
+  margin-bottom: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Note-only highlights: no fill, just a dotted underline */
+#document-view .highlight.highlight-note {
+  background-color: transparent !important;
+  box-shadow: none;
+  border-bottom: 2px dotted var(--se-yellow);
+  padding-bottom: 0;
+}
+#document-view .highlight.highlight-note.highlight-end.has-memo::after {
+  content: "\f249";                     /* fa-sticky-note */
+  color: var(--se-yellow);
+}
+#document-view .highlight.highlight-focus {
+  outline: 2px solid var(--se-purple);
+  outline-offset: 1px;
+}
+
+.quickpick-memo-label {
+  font-size: 0.8em;
+  color: var(--se-text-muted);
+  margin-right: 0.2rem;
+}
+.quickpick-memo-label .fa-sticky-note {
+  color: var(--se-yellow);
+}
+
+@media (max-width: 1100px) {
+  .document-view.has-notes { padding-right: 2.2em; }
+  #sticky-notes { display: none; }
+}
+
+/* ---------- Journal ---------- */
+
+#project-journal {
+  font-size: 0.92em;
+  line-height: 1.6;
+  resize: vertical;
+}
+.journal-status {
+  display: block;
+  text-align: right;
+  font-size: 0.75em;
+  color: var(--se-text-muted);
+  min-height: 1.2em;
+}
+
+/* ---------- TA guide ---------- */
+
+.ta-steps {
+  padding-left: 1.3rem;
+  margin: 0.2rem 0 0;
+  font-size: 0.88em;
+  color: var(--se-text);
+}
+.ta-steps li {
+  margin-bottom: 0.7rem;
+}
+.ta-steps strong {
+  color: var(--se-text-strong);
+}
+
+/* ---------- Matrix ---------- */
+
+.matrix-body {
+  overflow-x: auto;
+}
+.matrix-help {
+  color: var(--se-text-muted);
+  font-size: 0.88em;
+}
+.matrix-table {
+  font-size: 0.9em;
+  width: auto;
+  min-width: 100%;
+}
+.matrix-table th, .matrix-table td {
+  vertical-align: middle;
+  border-color: var(--se-border);
+}
+.matrix-table thead th {
+  border-bottom: 2px solid var(--se-border-2);
+  background-color: var(--se-surface);
+  position: sticky;
+  top: 0;
+}
+.matrix-doc span {
+  display: inline-block;
+  max-width: 7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--se-text);
+}
+.matrix-tag {
+  white-space: nowrap;
+  font-weight: 500;
+}
+.matrix-tag a { color: var(--se-text-strong); }
+.matrix-folder .matrix-tag a { font-weight: 600; }
+.matrix-cell {
+  text-align: center;
+  min-width: 2.6rem;
+  color: var(--se-text-strong);
+  border-radius: 4px;
+}
+.matrix-total {
+  text-align: center;
+  color: var(--se-text-muted);
+  font-weight: 600;
+}
+.matrix-notes th, .matrix-notes td {
+  border-top: 2px solid var(--se-border-2);
+}
+
+/* ---------- Home: delete button on cards ---------- */
+
+.project-card-wrap {
+  position: relative;
+}
+.project-card-wrap .project-card {
+  height: 100%;
+}
+.container-body a.project-card-delete,
+.project-card-delete {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.7rem;
+  width: 1.9rem;
+  height: 1.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--se-text-muted);
+  opacity: 0;
+  transition: opacity .12s, background-color .12s, color .12s;
+}
+.project-card-wrap:hover .project-card-delete {
+  opacity: 1;
+}
+.container-body a.project-card-delete:hover,
+.project-card-delete:hover {
+  background-color: var(--se-coral);
+  color: #fff;
+}
+#ta-guide .pane-title {
+  text-transform: none;
+  letter-spacing: 0.02em;
+}

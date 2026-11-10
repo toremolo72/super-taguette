@@ -4,14 +4,17 @@ A fork of [Taguette](https://www.taguette.org/), the open-source qualitative dat
 
 [日本語はこちら](#super-taguette-日本語)
 
+- **Built for thematic analysis (Braun & Clarke)** — document notes and margin sticky notes for familiarization, an analytic journal, folders as candidate themes, a codes × documents matrix for reviewing, definitions on themes and codes, and a one-click analysis report (HTML / Markdown / DOCX / PDF). A collapsible six-phase guide sits in the sidebar
 - **Tag as you select** — select text and a tag list appears on the spot; one click highlights. Type a name and press Enter to create a new tag right there
 - **Edit in place** — click an existing highlight to toggle its tags or delete it, no modal needed
+- **Folders & hierarchy** — create folders and drag tags into them (the tag list is a collapsible tree; sub-tags follow when a folder moves). Folders can't be applied to highlights, viewing a folder shows every highlight inside it, and tags inherit the folder's color unless given their own. Under the hood this is Taguette's dotted path (`emotion.joy`), so data stays compatible
 - **Per-tag colors** — pick from a palette or any custom color. Overlapping highlights blend visibly, and clicking an overlap lets you choose which one to edit
+- **Memos** — attach a free-text note (question, comment, interpretation) to any highlight, with ❓ / ⚠️ / ⭐ quick prefixes; a memo without tags works as a plain comment. Memos show in the highlights list and in CSV / Excel / document exports
 - **Seven color themes** — Soft Era, Rosé Pine Dawn, Catppuccin Latte, Everforest Light, Nord Light, Rosé Pine (dark), Catppuccin Mocha (dark), switchable from the navbar
 - **Japanese UI**, plus `.txt` / `.md` import without Calibre
 - Codebook exports (CSV / Excel / QDC-XML) include tag colors
 
-Data stays compatible with upstream (one extra column on the `tags` table for colors; an existing database is migrated automatically on first start, with a `.bak` backup). Same BSD-3-Clause license as Taguette.
+Data stays compatible with upstream (five extra nullable columns: `tags.color`, `tags.is_folder`, `highlights.memo`, `documents.memo` and `projects.journal`; an existing database is migrated automatically on first start, with a `.bak` backup). Same BSD-3-Clause license as Taguette.
 
 ## Install (just use it)
 
@@ -64,14 +67,17 @@ Upstream: https://gitlab.com/remram44/taguette (mirror: https://github.com/remra
 
 質的データ分析ツール [Taguette](https://www.taguette.org/) のフォークです。本家の機能はそのままに、**できるだけ少ない操作数でコーディング作業が進められること**を目標に、UI とインタラクションをカスタムしています。
 
+- **Thematic analysis（Braun & Clarke）対応** — 文書メモと余白の付箋（慣れ親しむ）、分析ノート、テーマ候補としてのフォルダ、見直し用のコード×文書マトリクス、テーマ/コードの定義、ワンクリックの分析レポート（HTML / Markdown / DOCX / PDF）。6フェーズのガイドをサイドバーに収録
 - **選択するだけでタグ付け** — テキストを選択するとその場にタグ一覧が出て、クリック 1 回でハイライト。名前を打って Enter すれば新しいタグをその場で作成
 - **その場で編集** — 既存のハイライトをクリックすれば、モーダルなしでタグの付け外し・削除
+- **フォルダと階層** — フォルダを作ってタグをドラッグ＆ドロップで入れる（タグ一覧は折りたたみ式ツリー、フォルダを動かすと中身も一緒に移動）。フォルダ自体はハイライトに付けられず、フォルダを開くと中の全タグのハイライトが見える。タグはフォルダの色を引き継ぐ。内部的には本家のドット区切りパス（`感情.喜び`）なのでデータ互換
 - **タグごとの色** — パレットから選ぶか任意の色を指定。重なったハイライトも色で見分けられ、クリックでどれを編集するか選べる
+- **メモ** — ハイライトに自由記述のメモ（疑問点・コメント・解釈）を付けられる。❓ / ⚠️ / ⭐ のワンクリック接頭辞つき。タグなしでメモだけ残せばコメントとして使える。一覧と CSV / Excel / 文書エクスポートにも出力
 - **7 種類のカラーテーマ** — Soft Era / Rosé Pine Dawn / Catppuccin Latte / Everforest Light / Nord Light / Rosé Pine（ダーク）/ Catppuccin Mocha（ダーク）をナビバーから切替
 - **日本語 UI**、`.txt` / `.md` の Calibre 不要の読み込み
 - コードブック書き出し（CSV / Excel / QDC-XML）にタグ色を含む
 
-データ形式は本家と互換です（タグ色のために `tags` テーブルに 1 列追加。既存のデータベースは初回起動時に自動変換され、`.bak` バックアップが作られます）。ライセンスは本家と同じ BSD-3-Clause です。
+データ形式は本家と互換です（`tags.color`・`tags.is_folder`・`highlights.memo`・`documents.memo`・`projects.journal` の 5 列を追加。既存のデータベースは初回起動時に自動変換され、`.bak` バックアップが作られます）。ライセンスは本家と同じ BSD-3-Clause です。
 
 ## インストール（使うだけ）
 

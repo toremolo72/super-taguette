@@ -1211,3 +1211,148 @@ msgstr "新しいフォルダ"
 msgctxt "tag tree drop zone"
 msgid "Drop here to move out of all folders"
 msgstr "ここにドロップでフォルダの外（トップレベル）へ"
+
+#: taguette/templates/project.html
+msgctxt "document memo"
+msgid "Notes on this document"
+msgstr "この文書についてのメモ"
+
+#: taguette/templates/project.html
+msgctxt "document memo"
+msgid "First impressions, context, things to come back to… (saved automatically)"
+msgstr "第一印象・文脈・あとで戻りたい点…（自動保存）"
+
+#: taguette/templates/project.html
+msgctxt "matrix"
+msgid "Highlights per code and document"
+msgstr "コード×文書ごとのハイライト数"
+
+#: taguette/templates/project.html
+msgctxt "matrix"
+msgid "Matrix"
+msgstr "マトリクス"
+
+#: taguette/templates/project.html
+msgctxt "matrix"
+msgid "Codes × documents"
+msgstr "コード × 文書"
+
+#: taguette/templates/project.html
+msgctxt "matrix"
+msgid "Number of highlights for each code in each document. Folders sum up their contents. Click a code to open its highlights."
+msgstr "各コードが各文書で付いた回数。フォルダは中身の合計です。コード名をクリックするとそのハイライト一覧を開きます。"
+
+#: taguette/templates/project.html
+msgctxt "project journal"
+msgid "Analytic journal"
+msgstr "分析ノート（研究日誌）"
+
+#: taguette/templates/project.html
+msgctxt "project journal"
+msgid "Research diary: hunches, decisions, candidate themes, questions… (saved automatically)"
+msgstr "気づき・判断の記録・テーマ候補・疑問など…（自動保存）"
+
+#: taguette/templates/project.html
+msgctxt "report export"
+msgid "Export analysis report"
+msgstr "分析レポートを書き出す"
+
+#: taguette/templates/project.html
+msgctxt "ta guide"
+msgid "Thematic analysis: the 6 phases"
+msgstr "Thematic analysis の6フェーズ"
+
+#: taguette/templates/project.html
+msgctxt "ta guide"
+msgid "Familiarize yourself with the data"
+msgstr "データに慣れ親しむ"
+
+#: taguette/templates/project.html
+msgctxt "ta guide"
+msgid "Read and re-read. Jot first impressions in the document notes above the text, and stick notes on passages (select text, type in the memo box, leave the tags empty)."
+msgstr "繰り返し読む。第一印象は本文上の「この文書についてのメモ」に、気になる箇所には付箋を（テキストを選択→メモ欄に入力、タグは付けない）。"
+
+#: taguette/templates/project.html
+msgctxt "ta guide"
+msgid "Generate initial codes"
+msgstr "初期コードを生成する"
+
+#: taguette/templates/project.html
+msgctxt "ta guide"
+msgid "Select a passage and click a tag, or type a new name and press Enter. Code generously; one passage can carry several codes."
+msgstr "箇所を選択してタグをクリック、または新しい名前を入力して Enter。惜しまずコード化する。1箇所に複数コードを付けてよい。"
+
+#: taguette/templates/project.html
+msgctxt "ta guide"
+msgid "Search for themes"
+msgstr "コードをまとめてテーマを探す"
+
+#: taguette/templates/project.html
+msgctxt "ta guide"
+msgid "Create folders as candidate themes and drag codes into them. Use the analytic journal for hunches."
+msgstr "テーマ候補としてフォルダを作り、コードをドラッグして入れる。思いつきは分析ノートへ。"
+
+#: taguette/templates/project.html
+msgctxt "ta guide"
+msgid "Review themes"
+msgstr "テーマを見直す"
+
+#: taguette/templates/project.html
+msgctxt "ta guide"
+msgid "Click a folder to read every extract inside it: do they cohere? Open the Matrix to see how codes spread across documents."
+msgstr "フォルダ名をクリックして中の抽出データを通読し、まとまりがあるか確認する。マトリクスでコードが文書全体にどう分布しているかを見る。"
+
+#: taguette/templates/project.html
+msgctxt "ta guide"
+msgid "Define and name themes"
+msgstr "テーマを定義し、名前をつける"
+
+#: taguette/templates/project.html
+msgctxt "ta guide"
+msgid "Edit each folder: rename it and write its definition in the description field. Do the same for codes."
+msgstr "各フォルダを編集して名前を決め、説明欄に定義を書く。コードにも同様に。"
+
+#: taguette/templates/project.html
+msgctxt "ta guide"
+msgid "Produce the report"
+msgstr "レポートを書く"
+
+#: taguette/templates/project.html
+msgctxt "ta guide"
+msgid "Export the analysis report: themes, definitions, codes and quoted extracts with their memos, ready to paste into your write-up."
+msgstr "「分析レポートを書き出す」で、テーマ・定義・コード・引用（抽出データ）・メモがまとまった文書を出力。そのまま執筆の下書きに。"
+
+#: taguette/templates/project.html
+msgctxt "quick tag picker"
+msgid "A memo with no tags becomes a sticky note in the margin"
+msgstr "タグを付けずにメモだけ書くと、余白に付箋として表示されます"
+
+#: taguette/templates/project.html
+msgctxt "quick tag picker"
+msgid "Note"
+msgstr "付箋メモ"
+
+#: taguette/export.py
+msgctxt "report heading"
+msgid "Analytic journal"
+msgstr "分析ノート"
+
+#: taguette/export.py
+msgctxt "report heading"
+msgid "Data"
+msgstr "データ"
+
+#: taguette/export.py
+msgctxt "report heading"
+msgid "Themes and codes"
+msgstr "テーマとコード"
+
+#: taguette/export.py
+msgctxt "report heading"
+msgid "Notes (uncoded)"
+msgstr "付箋メモ（コードなし）"
+
+#: taguette/export.py
+msgctxt "report"
+msgid "Memo"
+msgstr "メモ"

@@ -217,3 +217,7 @@ msgstr "暗黙のフォルダ：この名前のタグ/フォルダ自体はな�
 #: taguette/static/js/taguette.js
 msgid "New tag in this folder"
 msgstr "このフォルダにタグを作成"
+
+#: taguette/static/js/taguette.js
+msgid "Notes (no code)"
+msgstr "付箋メモ（コードなし）"

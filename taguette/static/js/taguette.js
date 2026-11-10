@@ -697,6 +697,9 @@ function updateDocumentsList() {
 updateDocumentsList();
 
 function addDocument(document) {
+  if(!('memo' in document) && documents['' + document.id]) {
+    document.memo = documents['' + document.id].memo;
+  }
   documents['' + document.id] = document;
   if(document.id === current_document) {
     // Text direction is the only meaningful thing that can be mutated
@@ -1632,14 +1635,15 @@ function setHighlight(highlight) {
   if(highlight.memo) {
     title = (title ? title + ' \u2014 ' : '') + highlight.memo;
   }
+  var is_note = hl_tags.length === 0;
   try {
-    highlightSelection([highlight.start_offset, highlight.end_offset], id, highlightClicked, title, color);
-    if(highlight.memo) {
-      var spans = document.getElementsByClassName('highlight-' + id);
-      for(var i = 0; i < spans.length; ++i) {
-        spans[i].classList.add('has-memo');
-      }
+    highlightSelection([highlight.start_offset, highlight.end_offset], id, highlightClicked, title, is_note ? null : color);
+    var spans = document.getElementsByClassName('highlight-' + id);
+    for(var i = 0; i < spans.length; ++i) {
+      if(highlight.memo) spans[i].classList.add('has-memo');
+      if(is_note) spans[i].classList.add('highlight-note');
     }
+    scheduleStickyLayout();
     console.log("Highlight set:", highlight);
   } catch(error) {
     console.error(
@@ -1658,6 +1662,7 @@ function removeHighlight(id) {
 
   delete highlights[id];
   console.log("Highlight removed:", id);
+  scheduleStickyLayout();
   if(quickpick_state && quickpick_state.hl_id !== null
    && '' + quickpick_state.hl_id === id) {
     quickpickClose();
@@ -2340,6 +2345,273 @@ document.addEventListener('keydown', function(e) {
 
 
 /*
+ * Document memo (notes about the whole document)
+ */
+
+var document_memo_box = document.getElementById('document-memo-box');
+var document_memo = document.getElementById('document-memo');
+var document_memo_status = document.getElementById('document-memo-status');
+var document_memo_timer = null;
+var document_memo_doc = null;
+
+function showDocumentMemo(document_id) {
+  document_memo_doc = document_id;
+  var doc = documents['' + document_id];
+  document_memo.value = (doc && doc.memo) || '';
+  document_memo_status.textContent = '';
+  document_memo_box.style.display = '';
+  // Collapsed when empty, open when there is something to read
+  var open = !!document_memo.value;
+  try {
+    var saved = localStorage.getItem('taguette-docmemo-open-' + project_id);
+    if(saved !== null) open = saved === '1';
+  } catch(e) {}
+  document_memo_box.classList.toggle('open', open);
+}
+
+function hideDocumentMemo() {
+  flushDocumentMemo();
+  document_memo_box.style.display = 'none';
+  document_memo_doc = null;
+}
+
+function flushDocumentMemo() {
+  if(document_memo_timer !== null) {
+    clearTimeout(document_memo_timer);
+    document_memo_timer = null;
+  }
+  if(document_memo_doc === null) return;
+  var doc = documents['' + document_memo_doc];
+  var memo = document_memo.value.trim();
+  if(!doc || memo === (doc.memo || '')) return;
+  var doc_id = document_memo_doc;
+  document_memo_status.textContent = gettext("Saving\u2026");
+  postJSON('/api/project/' + project_id + '/document/' + doc_id + '/memo', {memo: memo})
+  .then(function() {
+    if(documents['' + doc_id]) documents['' + doc_id].memo = memo || null;
+    if(document_memo_doc === doc_id) document_memo_status.textContent = gettext("Saved");
+  })
+  .catch(function(error) {
+    document_memo_status.textContent = gettext("Error");
+    console.error("Failed to save document memo:", error);
+  });
+}
+
+document_memo.addEventListener('input', function() {
+  if(document_memo_timer !== null) clearTimeout(document_memo_timer);
+  document_memo_status.textContent = '';
+  document_memo_timer = setTimeout(flushDocumentMemo, 800);
+});
+document_memo.addEventListener('blur', flushDocumentMemo);
+document.getElementById('document-memo-toggle').addEventListener('click', function() {
+  var open = !document_memo_box.classList.contains('open');
+  document_memo_box.classList.toggle('open', open);
+  try { localStorage.setItem('taguette-docmemo-open-' + project_id, open ? '1' : '0'); } catch(e) {}
+  if(open) document_memo.focus();
+});
+window.addEventListener('beforeunload', function() { flushDocumentMemo(); flushJournal(); });
+
+
+/*
+ * Sticky notes in the margin: one card per highlight that has a memo
+ */
+
+var sticky_container = document.getElementById('sticky-notes');
+var document_view = document.getElementById('document-view');
+var sticky_layout_timer = null;
+
+function clearStickyNotes() {
+  while(sticky_container.firstChild) sticky_container.removeChild(sticky_container.firstChild);
+  document_view.classList.remove('has-notes');
+}
+
+function scheduleStickyLayout() {
+  if(sticky_layout_timer !== null) return;
+  sticky_layout_timer = window.setTimeout(function() {
+    sticky_layout_timer = null;
+    layoutStickyNotes();
+  }, 30);
+}
+
+function layoutStickyNotes() {
+  clearStickyNotes();
+  if(current_document === null) return;
+  var items = [];
+  var hl_entries = Object.values(highlights);
+  for(var i = 0; i < hl_entries.length; ++i) {
+    var hl = hl_entries[i];
+    if(!hl.memo) continue;
+    var span = document.querySelector('.highlight-' + hl.id);
+    if(!span) continue;
+    items.push({hl: hl, top: span.getBoundingClientRect().top});
+  }
+  if(items.length === 0) return;
+  document_view.classList.add('has-notes');
+  var viewTop = document_view.getBoundingClientRect().top;
+  sortByKey(items, function(it) { return it.top; });
+  var nextFree = 0;
+  for(var i = 0; i < items.length; ++i) {
+    var hl = items[i].hl;
+    var card = document.createElement('div');
+    card.className = 'sticky-note' + (hl.tags.length ? ' sticky-coded' : '');
+    card.setAttribute('data-highlight-id', hl.id);
+    if(hl.tags.length) {
+      var sorted = hl.tags.slice();
+      sortByKey(sorted, function(t) { return tags[t] ? tags[t].path : ''; });
+      card.style.borderLeftColor = tagColor(sorted[0], 0.9);
+      var tagline = document.createElement('div');
+      tagline.className = 'sticky-tags';
+      tagline.textContent = sorted.map(function(t) { return tags[t] ? tagLeafName(tags[t].path) : ''; }).join(', ');
+      card.appendChild(tagline);
+    }
+    var body = document.createElement('div');
+    body.className = 'sticky-body';
+    body.textContent = hl.memo;
+    card.appendChild(body);
+    (function(id) {
+      card.addEventListener('click', function(e) {
+        e.stopPropagation();
+        quickpickOpenForHighlight(id, e.clientX, e.clientY);
+      });
+      card.addEventListener('mouseenter', function() {
+        var spans = document.getElementsByClassName('highlight-' + id);
+        for(var k = 0; k < spans.length; ++k) spans[k].classList.add('highlight-focus');
+      });
+      card.addEventListener('mouseleave', function() {
+        var spans = document.getElementsByClassName('highlight-' + id);
+        for(var k = 0; k < spans.length; ++k) spans[k].classList.remove('highlight-focus');
+      });
+    })(hl.id);
+    var top = Math.max(items[i].top - viewTop, nextFree);
+    card.style.top = top + 'px';
+    sticky_container.appendChild(card);
+    nextFree = top + card.offsetHeight + 8;
+  }
+  // Make sure the view is tall enough for the last note
+  var needed = nextFree + 16;
+  document_view.style.minHeight = needed > document_view.offsetHeight ? needed + 'px' : '';
+}
+window.addEventListener('resize', scheduleStickyLayout);
+document.addEventListener('taguette-theme-changed', scheduleStickyLayout);
+
+
+/*
+ * Analytic journal (project-level research diary)
+ */
+
+var journal_input = document.getElementById('project-journal');
+var journal_status = document.getElementById('project-journal-status');
+var journal_timer = null;
+var journal_saved = journal_input ? journal_input.value : '';
+
+function flushJournal() {
+  if(!journal_input) return;
+  if(journal_timer !== null) { clearTimeout(journal_timer); journal_timer = null; }
+  var text = journal_input.value;
+  if(text === journal_saved) return;
+  journal_status.textContent = gettext("Saving\u2026");
+  postJSON('/api/project/' + project_id + '/journal', {journal: text.trim()})
+  .then(function() {
+    journal_saved = text;
+    journal_status.textContent = gettext("Saved");
+  })
+  .catch(function(error) {
+    journal_status.textContent = gettext("Error");
+    console.error("Failed to save journal:", error);
+  });
+}
+if(journal_input) {
+  journal_input.addEventListener('input', function() {
+    if(journal_timer !== null) clearTimeout(journal_timer);
+    journal_status.textContent = '';
+    journal_timer = setTimeout(flushJournal, 1000);
+  });
+  journal_input.addEventListener('blur', flushJournal);
+}
+
+
+/*
+ * Matrix: highlights per code and document
+ */
+
+function showMatrix() {
+  var wrap = document.getElementById('matrix-table-wrap');
+  wrap.innerHTML = '<p class="text-muted">' + gettext("Loading...") + '</p>';
+  $('#matrix-modal').modal();
+  getJSON('/api/project/' + project_id + '/matrix')
+  .then(function(data) {
+    var docs = Object.values(documents);
+    sortByKey(docs, function(d) { return d.name; });
+    var tag_list = Object.values(tags);
+    sortByKey(tag_list, function(t) { return t.path; });
+
+    function cellCount(tag, doc) {
+      // folders (and any tag) sum their own count with their descendants'
+      var n = 0;
+      for(var i = 0; i < tag_list.length; ++i) {
+        var t = tag_list[i];
+        if(t.path === tag.path || tagIsDescendant(t.path, tag.path)) {
+          var row = data.cells['' + t.id];
+          if(row && row['' + doc.id]) n += row['' + doc.id];
+        }
+      }
+      return n;
+    }
+
+    var html = '<table class="table table-sm matrix-table"><thead><tr><th></th>';
+    for(var d = 0; d < docs.length; ++d) {
+      html += '<th class="matrix-doc" title="' + escapeHtml(docs[d].name) + '"><span>' + escapeHtml(docs[d].name) + '</span></th>';
+    }
+    html += '<th class="matrix-total">\u03a3</th></tr></thead><tbody>';
+    var maxCell = 1;
+    for(var i = 0; i < tag_list.length; ++i) {
+      for(var d = 0; d < docs.length; ++d) maxCell = Math.max(maxCell, cellCount(tag_list[i], docs[d]));
+    }
+    for(var i = 0; i < tag_list.length; ++i) {
+      var t = tag_list[i];
+      var total = 0;
+      var cells = '';
+      for(var d = 0; d < docs.length; ++d) {
+        var n = cellCount(t, docs[d]);
+        total += n;
+        var alpha = n ? 0.15 + 0.6 * (n / maxCell) : 0;
+        cells += '<td class="matrix-cell" style="background-color: ' + (n ? tagColor(t.id, alpha) : 'transparent') + ';">' + (n || '') + '</td>';
+      }
+      html += '<tr class="' + (t.is_folder ? 'matrix-folder' : '') + '"><th class="matrix-tag" style="padding-left: ' + (0.5 + tagDepth(t.path) * 1.1) + 'rem;">' +
+        (t.is_folder ? '<i class="fas fa-folder tag-folder-icon" style="color: ' + tagColor(t.id, 0.9) + '"></i>' : '<span class="tag-swatch" style="background-color: ' + tagColor(t.id, 0.9) + '"></span>') +
+        '<a href="javascript:void(0)" data-tag-path="' + escapeHtml(t.path) + '">' + escapeHtml(tagLeafName(t.path)) + '</a></th>' +
+        cells + '<td class="matrix-total">' + total + '</td></tr>';
+    }
+    // notes without tags
+    var noteTotal = 0, noteCells = '';
+    for(var d = 0; d < docs.length; ++d) {
+      var n = data.untagged['' + docs[d].id] || 0;
+      noteTotal += n;
+      noteCells += '<td class="matrix-cell matrix-note-cell">' + (n || '') + '</td>';
+    }
+    html += '<tr class="matrix-notes"><th class="matrix-tag"><i class="fas fa-sticky-note" style="color: var(--se-yellow)"></i> ' + gettext("Notes (no code)") + '</th>' + noteCells + '<td class="matrix-total">' + noteTotal + '</td></tr>';
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+    var links = wrap.querySelectorAll('a[data-tag-path]');
+    for(var i = 0; i < links.length; ++i) {
+      (function(a) {
+        a.addEventListener('click', function(e) {
+          e.preventDefault();
+          $('#matrix-modal').modal('hide');
+          var path = a.getAttribute('data-tag-path');
+          window.history.pushState({tag_path: path}, "Tag " + path, base_path + '/project/' + project_id + '/highlights/' + encodeURIComponent(path));
+          loadTag(path);
+        });
+      })(links[i]);
+    }
+  })
+  .catch(function(error) {
+    wrap.innerHTML = '<p class="text-danger">' + escapeHtml('' + error) + '</p>';
+  });
+}
+
+
+/*
  * Members
  */
 
@@ -2526,6 +2798,8 @@ var export_button = document.getElementById('export-button');
 
 function loadDocument(document_id) {
   if(document_id === null) {
+    hideDocumentMemo();
+    clearStickyNotes();
     document_contents.style.direction = 'ltr';
     document_contents.innerHTML = '<p style="font-style: oblique; text-align: center;">' + gettext("Load a document on the left") + '</p>';
     return;
@@ -2558,6 +2832,7 @@ function loadDocument(document_id) {
       document_contents.style.direction = 'ltr';
     }
     current_document = document_id;
+    showDocumentMemo(document_id);
 
     // Update current document highlight in left panel
     var document_links = document.getElementsByClassName('document-link-current');
@@ -2616,6 +2891,8 @@ function loadTag(tag_path, page) {
   )
   .then(function(result) {
     console.log("Loaded highlights for tag", tag_path || "''");
+    hideDocumentMemo();
+    clearStickyNotes();
     document_contents.style.direction = 'ltr';
     current_tag = tag_path;
     current_document = null;

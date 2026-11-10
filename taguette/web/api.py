@@ -6,7 +6,7 @@ import logging
 import math
 import os
 import prometheus_client
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, func
 from sqlalchemy.exc import IntegrityError, DatabaseError, NoSuchTableError
 from sqlalchemy.orm import aliased, defer, joinedload
 import tempfile
@@ -173,6 +173,99 @@ class DocumentAdd(BaseHandler):
         except validate.InvalidFormat as e:
             logger.info("Error validating DocumentAdd: %r", e)
             return await self.send_error_json(400, self.gettext(e.message))
+
+
+class ProjectJournal(BaseHandler):
+    """Analytic journal of the project (free text, saved as-is)."""
+    @api_auth
+    @PROM_REQUESTS.sync('project_journal')
+    def post(self, project_id):
+        project, privileges = self.get_project(project_id)
+        if not privileges.can_edit_project_meta():
+            return self.send_error_json(403, self.gettext("Unauthorized"))
+        obj = self.get_json()
+        journal = obj.get('journal') or None
+        try:
+            validate.memo(journal)
+        except validate.InvalidFormat as e:
+            return self.send_error_json(400, self.gettext(e.message))
+        project.journal = journal
+        self.db.commit()
+        return self.send_json({})
+
+
+class DocumentMemo(BaseHandler):
+    """Free-text memo attached to a whole document."""
+    @api_auth
+    @PROM_REQUESTS.sync('document_memo')
+    def post(self, project_id, document_id):
+        document, privileges = self.get_document(project_id, document_id)
+        if not privileges.can_edit_document():
+            return self.send_error_json(403, self.gettext("Unauthorized"))
+        obj = self.get_json()
+        memo = obj.get('memo') or None
+        try:
+            validate.memo(memo)
+        except validate.InvalidFormat as e:
+            return self.send_error_json(400, self.gettext(e.message))
+        document.memo = memo
+        self.db.commit()
+        return self.send_json({})
+
+
+class Matrix(BaseHandler):
+    """Number of highlights per (tag, document), for reviewing themes."""
+    @api_auth
+    @PROM_REQUESTS.sync('matrix')
+    def get(self, project_id):
+        project, _ = self.get_project(project_id)
+        rows = (
+            self.db.query(
+                database.highlight_tags.c.tag_id,
+                database.Highlight.document_id,
+                func.count(database.Highlight.id),
+            )
+            .join(
+                database.Highlight,
+                database.Highlight.id == database.highlight_tags.c.highlight_id,
+            )
+            .join(
+                database.Document,
+                database.Document.id == database.Highlight.document_id,
+            )
+            .filter(database.Document.project_id == project.id)
+            .group_by(
+                database.highlight_tags.c.tag_id,
+                database.Highlight.document_id,
+            )
+            .all()
+        )
+        cells = {}
+        for tag_id, doc_id, count in rows:
+            cells.setdefault(str(tag_id), {})[str(doc_id)] = count
+        # Highlights without any tag (notes), per document
+        untagged = (
+            self.db.query(
+                database.Highlight.document_id,
+                func.count(database.Highlight.id),
+            )
+            .outerjoin(
+                database.highlight_tags,
+                database.highlight_tags.c.highlight_id == database.Highlight.id,
+            )
+            .join(
+                database.Document,
+                database.Document.id == database.Highlight.document_id,
+            )
+            .filter(database.Document.project_id == project.id)
+            .filter(database.highlight_tags.c.tag_id.is_(None))
+            .group_by(database.Highlight.document_id)
+            .all()
+        )
+        return self.send_json({
+            'cells': cells,
+            'untagged': {str(doc_id): count for doc_id, count in untagged},
+        })
 
 
 class Document(BaseHandler):

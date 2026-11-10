@@ -424,3 +424,128 @@ async def codebook_document(tags, ext, *, config, locale):
     )
     contents = await contents
     return mimetype, contents
+
+
+# ---------------------------------------------------------------------------
+# Thematic-analysis report: themes (folders) -> codes -> extracts, plus memos
+
+
+def _report_data(db, project):
+    """Collect everything the report needs, as plain dicts."""
+    tags = sorted(project.tags, key=lambda t: t.path)
+    by_path = {t.path: t for t in tags}
+
+    # Highlights with their tags and document, in document order
+    t_hl = database.Highlight
+    rows = (
+        db.query(t_hl, database.Document.name)
+        .join(database.Document, database.Document.id == t_hl.document_id)
+        .filter(database.Document.project_id == project.id)
+        .order_by(database.Document.name, t_hl.document_id, t_hl.start_offset)
+        .all()
+    )
+    extracts_by_tag = {}
+    notes = []  # highlights without tags: sticky notes
+    for hl, doc_name in rows:
+        item = {
+            'id': hl.id,
+            'document': doc_name,
+            'text': convert.html_to_plaintext(hl.snippet),
+            'memo': hl.memo or '',
+        }
+        if hl.tags:
+            for t in hl.tags:
+                extracts_by_tag.setdefault(t.id, []).append(item)
+        else:
+            notes.append(item)
+
+    def node(tag):
+        children = [
+            node(c) for c in tags
+            if c.path.startswith(tag.path + '.')
+            and '.' not in c.path[len(tag.path) + 1:]
+        ]
+        return {
+            'id': tag.id,
+            'name': tag.path.rsplit('.', 1)[-1],
+            'path': tag.path,
+            'description': tag.description or '',
+            'color': tag.color,
+            'is_folder': bool(tag.is_folder),
+            'count': tag.highlights_count,
+            'extracts': extracts_by_tag.get(tag.id, []),
+            'children': children,
+        }
+
+    top = [node(t) for t in tags if '.' not in t.path]
+    documents = [
+        {'name': d.name, 'description': d.description or '', 'memo': d.memo or ''}
+        for d in sorted(project.documents, key=lambda d: d.name)
+    ]
+    return {
+        'project': project,
+        'journal': project.journal or '',
+        'documents': documents,
+        'themes': top,
+        'notes': notes,
+        'total_highlights': sum(len(v) for v in extracts_by_tag.values()),
+    }
+
+
+@tracer.start_as_current_span('taguette/export/report_document')
+async def report_document(db, project, ext, *, config, locale):
+    """Export the analysis report as HTML (or DOCX/PDF via Calibre)."""
+    data = _report_data(db, project)
+    html = _render_string('export_report.html', locale, **data)
+    mimetype, contents = convert.html_to(html, ext, config)
+    contents = await contents
+    return mimetype, contents
+
+
+def report_markdown(db, project, locale):
+    """Export the analysis report as Markdown."""
+    data = _report_data(db, project)
+    tr = _Translator(locale)
+    out = []
+    w = out.append
+    w('# %s\n' % project.name)
+    if project.description:
+        w(project.description.strip() + '\n')
+    w('')
+    if data['journal']:
+        w('## %s\n' % tr.pgettext('report heading', 'Analytic journal'))
+        w(data['journal'].strip() + '\n')
+    w('## %s\n' % tr.pgettext('report heading', 'Data'))
+    for d in data['documents']:
+        w('### %s\n' % d['name'])
+        if d['description']:
+            w(d['description'].strip() + '\n')
+        if d['memo']:
+            w('> ' + d['memo'].strip().replace('\n', '\n> ') + '\n')
+    w('## %s\n' % tr.pgettext('report heading', 'Themes and codes'))
+
+    def write_node(n, level):
+        heading = '#' * min(level, 6)
+        label = n['name']
+        if not n['is_folder']:
+            label += ' (%d)' % n['count']
+        w('%s %s\n' % (heading, label))
+        if n['description']:
+            w(n['description'].strip() + '\n')
+        for ex in n['extracts']:
+            w('> %s\n>\n> — *%s*%s\n' % (
+                ex['text'].replace('\n', ' '),
+                ex['document'],
+                ('  \n> %s: %s' % (tr.pgettext('report', 'Memo'), ex['memo'])) if ex['memo'] else '',
+            ))
+        for c in n['children']:
+            write_node(c, level + 1)
+
+    for n in data['themes']:
+        write_node(n, 3)
+    if data['notes']:
+        w('## %s\n' % tr.pgettext('report heading', 'Notes (uncoded)'))
+        for ex in data['notes']:
+            w('- **%s** — %s  \n  %s' % (ex['document'], ex['memo'], ex['text'].replace('\n', ' ')))
+        w('')
+    return '\n'.join(out)

@@ -67,6 +67,7 @@ def copy_project(
         validators=dict(
             name=validate.document_name,
             description=validate.description,
+            memo=validate.memo,
             filename=validate.filename,
             contents=convert.is_html_safe,
         ),

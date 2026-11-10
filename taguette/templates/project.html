@@ -33,6 +33,7 @@
             <a class="btn btn-sm btn-primary" href="javascript:createTag()">{% trans %}Create a tag{% endtrans %}</a>
             <a class="btn btn-sm btn-outline-primary" href="javascript:createFolder()" title="{% trans "tag tree" %}Folders group tags; they can't be applied to highlights{% endtrans %}"><i class="fas fa-folder-plus"></i> {% trans "tag tree" %}New folder{% endtrans %}</a>
             <a id="load-all-tags" class="btn btn-sm btn-outline-primary" href="/project/{{ project.id }}/highlights/">{% trans %}See all highlights{% endtrans %}</a>
+            <a class="btn btn-sm btn-outline-primary" href="javascript:showMatrix()" title="{% trans "matrix" %}Highlights per code and document{% endtrans %}"><i class="fas fa-th"></i> {% trans "matrix" %}Matrix{% endtrans %}</a>
             <div class="dropdown">
               <button class="btn btn-sm btn-outline-primary" type="button" id="tag-sortby-button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                 <i class="fa fa-sort"></i>
@@ -75,6 +76,24 @@
           <p><a href="javascript:showMembers()" class="w-100 btn btn-outline-secondary" role="button">{% trans %}Manage collaborators{% endtrans %}</a></p>
           {% endif %}
 
+          <div class="form-group">
+            <label for="project-journal" class="col-form-label">{% trans "project journal" %}Analytic journal{% endtrans %}</label>
+            <textarea class="form-control" id="project-journal" rows="6" placeholder="{% trans "project journal" %}Research diary: hunches, decisions, candidate themes, questions… (saved automatically){% endtrans %}">{{ project.journal or '' }}</textarea>
+            <span id="project-journal-status" class="journal-status"></span>
+          </div>
+
+          <div class="dropdown mb-3">
+            <button class="w-100 btn btn-primary dropdown-toggle" type="button" id="dropdown-report" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+              <i class="fas fa-file-alt"></i> {% trans "report export" %}Export analysis report{% endtrans %}
+            </button>
+            <div class="dropdown-menu" aria-labelledby="dropdown-report">
+              <a href="{{ reverse_url('export_report_doc', project.id, 'html') }}" class="dropdown-item">{% trans %}HTML{% endtrans %}</a>
+              <a href="{{ reverse_url('export_report_md', project.id) }}" class="dropdown-item">Markdown</a>
+              <a href="{{ reverse_url('export_report_doc', project.id, 'docx') }}" class="dropdown-item">{% trans %}DOCX{% endtrans %}</a>
+              <a href="{{ reverse_url('export_report_doc', project.id, 'pdf') }}" class="dropdown-item">{% trans %}PDF{% endtrans %}</a>
+            </div>
+          </div>
+
           <p><a href="{{ reverse_url('export_project_sqlite', project.id) }}" class="w-100 btn btn-outline-primary" role="button">{% trans %}Export project{% endtrans %}</a></p>
 
           <div class="dropdown mb-3">
@@ -101,6 +120,25 @@
         </div>
       </section>
 
+      <!-- Thematic analysis guide -->
+      <section class="pane-section" id="ta-guide">
+        <div class="pane-header">
+          <a class="pane-title pane-collapse-toggle collapsed" data-toggle="collapse" href="#ta-guide-body" role="button" aria-expanded="false" aria-controls="ta-guide-body">
+            <i class="fas fa-chevron-right pane-chevron"></i> {% trans "ta guide" %}Thematic analysis: the 6 phases{% endtrans %}
+          </a>
+        </div>
+        <div class="collapse" id="ta-guide-body">
+          <ol class="ta-steps">
+            <li><strong>{% trans "ta guide" %}Familiarize yourself with the data{% endtrans %}</strong><br>{% trans "ta guide" %}Read and re-read. Jot first impressions in the document notes above the text, and stick notes on passages (select text, type in the memo box, leave the tags empty).{% endtrans %}</li>
+            <li><strong>{% trans "ta guide" %}Generate initial codes{% endtrans %}</strong><br>{% trans "ta guide" %}Select a passage and click a tag, or type a new name and press Enter. Code generously; one passage can carry several codes.{% endtrans %}</li>
+            <li><strong>{% trans "ta guide" %}Search for themes{% endtrans %}</strong><br>{% trans "ta guide" %}Create folders as candidate themes and drag codes into them. Use the analytic journal for hunches.{% endtrans %}</li>
+            <li><strong>{% trans "ta guide" %}Review themes{% endtrans %}</strong><br>{% trans "ta guide" %}Click a folder to read every extract inside it: do they cohere? Open the Matrix to see how codes spread across documents.{% endtrans %}</li>
+            <li><strong>{% trans "ta guide" %}Define and name themes{% endtrans %}</strong><br>{% trans "ta guide" %}Edit each folder: rename it and write its definition in the description field. Do the same for codes.{% endtrans %}</li>
+            <li><strong>{% trans "ta guide" %}Produce the report{% endtrans %}</strong><br>{% trans "ta guide" %}Export the analysis report: themes, definitions, codes and quoted extracts with their memos, ready to paste into your write-up.{% endtrans %}</li>
+          </ol>
+        </div>
+      </section>
+
     </div>
   </div>
 
@@ -121,9 +159,18 @@
         </div>
       </div>
 
+      <div id="document-memo-box" style="display: none;">
+        <a href="javascript:void(0)" id="document-memo-toggle" class="document-memo-toggle"><i class="fas fa-sticky-note"></i> <span>{% trans "document memo" %}Notes on this document{% endtrans %}</span> <i class="fas fa-chevron-down document-memo-chevron"></i></a>
+        <div id="document-memo-body">
+          <textarea id="document-memo" rows="3" placeholder="{% trans "document memo" %}First impressions, context, things to come back to… (saved automatically){% endtrans %}"></textarea>
+          <span id="document-memo-status" class="quickpick-memo-status"></span>
+        </div>
+      </div>
+
       <div id="document-contents" style="direction: ltr;">
         <p style="font-style: oblique; text-align: center;">{% trans %}Load a document on the left{% endtrans %}</p>
       </div>
+      <div id="sticky-notes"></div>
     </div>
 
   </div>
@@ -395,12 +442,29 @@
 <script type="text/javascript" src="{{ reverse_url('trans.js') }}"></script>
 
 <!-- "New highlight" button shown after selecting text -->
+<!-- Matrix modal -->
+<div class="modal" id="matrix-modal" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-dialog-centered modal-xl" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">{% trans "matrix" %}Codes × documents{% endtrans %}</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+      </div>
+      <div class="modal-body matrix-body">
+        <p class="matrix-help">{% trans "matrix" %}Number of highlights for each code in each document. Folders sum up their contents. Click a code to open its highlights.{% endtrans %}</p>
+        <div id="matrix-table-wrap"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="quickpick">
   <div id="quickpick-snippet" class="quickpick-snippet"></div>
   <input id="quickpick-search" type="text" autocomplete="off" placeholder="{% trans "quick tag picker" %}Search or create a tag…{% endtrans %}" />
   <div id="quickpick-list" class="quickpick-list"></div>
   <div class="quickpick-memo">
     <div class="quickpick-memo-chips">
+      <span class="quickpick-memo-label" title="{% trans "quick tag picker" %}A memo with no tags becomes a sticky note in the margin{% endtrans %}"><i class="fas fa-sticky-note"></i> {% trans "quick tag picker" %}Note{% endtrans %}</span>
       <a href="javascript:void(0)" class="memo-chip" data-chip="❓">{% trans "memo quick prefix" %}❓ Question{% endtrans %}</a>
       <a href="javascript:void(0)" class="memo-chip" data-chip="⚠️">{% trans "memo quick prefix" %}⚠️ Check{% endtrans %}</a>
       <a href="javascript:void(0)" class="memo-chip" data-chip="⭐">{% trans "memo quick prefix" %}⭐ Important{% endtrans %}</a>

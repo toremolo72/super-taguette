@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>{{ project.name }}</title>
+    <style>
+      body { font-family: sans-serif; line-height: 1.6; max-width: 48em; margin: 2em auto; padding: 0 1em; color: #333; }
+      h1 { border-bottom: 2px solid #ccc; padding-bottom: .3em; }
+      h2 { margin-top: 2em; border-bottom: 1px solid #ddd; }
+      .theme { margin: 1.5em 0 0 0; }
+      .code { margin: 1em 0 0 1.5em; }
+      .swatch { display: inline-block; width: .8em; height: .8em; border-radius: 50%; margin-right: .4em; vertical-align: middle; border: 1px solid rgba(0,0,0,.2); }
+      .definition { color: #555; margin: .2em 0 .6em; }
+      .count { color: #888; font-weight: normal; font-size: .85em; }
+      blockquote { margin: .6em 0 .6em 1em; padding: .4em .8em; border-left: 3px solid #bbb; background: #f7f7f7; }
+      blockquote .src { display: block; color: #777; font-size: .85em; margin-top: .3em; }
+      .memo { color: #6a4f9c; font-style: italic; }
+      .docmemo { background: #fbf7e6; border-left: 3px solid #e0c060; padding: .4em .8em; margin: .4em 0; white-space: pre-wrap; }
+      .journal { white-space: pre-wrap; background: #f3f1fa; border-left: 3px solid #9a8bd0; padding: .6em .9em; }
+    </style>
+  </head>
+  <body>
+    <h1>{{ project.name }}</h1>
+    {% if project.description %}<p>{{ project.description }}</p>{% endif %}
+
+    {% if journal %}
+    <h2>{% trans "report heading" %}Analytic journal{% endtrans %}</h2>
+    <div class="journal">{{ journal }}</div>
+    {% endif %}
+
+    <h2>{% trans "report heading" %}Data{% endtrans %}</h2>
+    {% for d in documents %}
+    <h3>{{ d.name }}</h3>
+    {% if d.description %}<p>{{ d.description }}</p>{% endif %}
+    {% if d.memo %}<div class="docmemo">{{ d.memo }}</div>{% endif %}
+    {% endfor %}
+
+    <h2>{% trans "report heading" %}Themes and codes{% endtrans %}</h2>
+    {% macro render(n, level) -%}
+    <div class="{{ 'theme' if n.is_folder else 'code' }}">
+      {% set h = 'h' ~ ([level, 6] | min) %}
+      <{{ h }}>{% if n.color %}<span class="swatch" style="background: {{ n.color }}"></span>{% endif %}{{ n.name }}{% if not n.is_folder %} <span class="count">({{ n.count }})</span>{% endif %}</{{ h }}>
+      {% if n.description %}<p class="definition">{{ n.description }}</p>{% endif %}
+      {% for ex in n.extracts %}
+      <blockquote>{{ ex.text }}{% if ex.memo %}<br><span class="memo">{% trans "report" %}Memo{% endtrans %}: {{ ex.memo }}</span>{% endif %}<span class="src">— {{ ex.document }}</span></blockquote>
+      {% endfor %}
+      {% for c in n.children %}{{ render(c, level + 1) }}{% endfor %}
+    </div>
+    {%- endmacro %}
+    {% for n in themes %}{{ render(n, 3) }}{% endfor %}
+
+    {% if notes %}
+    <h2>{% trans "report heading" %}Notes (uncoded){% endtrans %}</h2>
+    {% for ex in notes %}
+    <blockquote>{{ ex.text }}<br><span class="memo">{{ ex.memo }}</span><span class="src">— {{ ex.document }}</span></blockquote>
+    {% endfor %}
+    {% endif %}
+  </body>
+</html>

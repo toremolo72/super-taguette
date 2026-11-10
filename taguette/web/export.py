@@ -324,3 +324,33 @@ class ExportSqlite(BaseHandler):
                         break
                     await self.flush()
                 return await self.finish()
+
+
+class ExportReportDoc(BaseHandler):
+    init_PROM_EXPORT('report')
+
+    @authenticated
+    @return_doc
+    async def get(self, project_id, ext):
+        ext = ext.lower()
+        PROM_EXPORT.labels('report', ext).inc()
+        project, _ = self.get_project(project_id)
+        mimetype, contents = await export.report_document(
+            self.db, project, ext,
+            config=self.application.config,
+            locale=self.locale,
+        )
+        return 'report', mimetype, contents
+
+
+class ExportReportMarkdown(BaseHandler):
+    PROM_EXPORT.labels('report', 'md').inc(0)
+
+    @authenticated
+    def get(self, project_id):
+        PROM_EXPORT.labels('report', 'md').inc()
+        project, _ = self.get_project(project_id)
+        text = export.report_markdown(self.db, project, self.locale)
+        self.set_header('Content-Type', 'text/markdown; charset=utf-8')
+        self.set_header('Content-Disposition', 'attachment; filename="report.md"')
+        return self.finish(text)

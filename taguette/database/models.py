@@ -211,6 +211,8 @@ class Project(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=False)
+    # Analytic journal / research diary for the project
+    journal = Column(Text, nullable=True)
     created = Column(DateTime, nullable=False,
                      default=lambda: datetime.now(timezone.utc))
     members = relationship('ProjectMember', cascade='all,delete-orphan',
@@ -306,6 +308,8 @@ class Document(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=False)
+    # Free-text notes about the document as a whole (familiarization)
+    memo = Column(Text, nullable=True)
     filename = Column(String(200), nullable=False)
     created = Column(DateTime, nullable=False,
                      default=lambda: datetime.now(timezone.utc))
