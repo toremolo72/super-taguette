@@ -221,3 +221,11 @@ msgstr "このフォルダにタグを作成"
 #: taguette/static/js/taguette.js
 msgid "Notes (no code)"
 msgstr "付箋メモ（コードなし）"
+
+#: taguette/static/js/taguette.js
+msgid "l. %(line)s"
+msgstr "%(line)s行目"
+
+#: taguette/static/js/taguette.js
+msgid "l. %(first)s–%(last)s"
+msgstr "%(first)s–%(last)s行目"

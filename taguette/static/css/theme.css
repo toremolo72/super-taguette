@@ -1628,3 +1628,48 @@ li.tag-current {
   text-transform: none;
   letter-spacing: 0.02em;
 }
+
+/* Divider between the highlight's own tags and the rest */
+.quickpick-row.quickpick-after-pinned {
+  margin-top: 0.35rem;
+  position: relative;
+}
+.quickpick-row.quickpick-after-pinned::before {
+  content: "";
+  position: absolute;
+  left: 0.6rem;
+  right: 0.6rem;
+  top: -0.2rem;
+  border-top: 1px solid var(--se-border);
+}
+
+/* ---------- Line numbers ---------- */
+
+.document-view.has-lines {
+  padding-left: 4.2em;
+}
+#line-gutter {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3.4em;
+  pointer-events: none;
+}
+.line-number {
+  position: absolute;
+  right: 0;
+  font-size: 0.72em;
+  font-variant-numeric: tabular-nums;
+  color: var(--se-text-muted);
+  opacity: 0.55;
+  user-select: none;
+}
+.line-number.line-number-5 {
+  opacity: 0.95;
+}
+.badge.highlight-lines {
+  background-color: transparent;
+  color: var(--se-text-muted);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}

@@ -1356,3 +1356,13 @@ msgstr "付箋メモ（コードなし）"
 msgctxt "report"
 msgid "Memo"
 msgstr "メモ"
+
+#: taguette/templates/project.html
+msgctxt "document view option"
+msgid "Line numbers"
+msgstr "行番号"
+
+#: taguette/export.py
+msgctxt "report"
+msgid "l. %(lines)s"
+msgstr "%(lines)s行目"

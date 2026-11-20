@@ -13,6 +13,7 @@ from xml.sax.saxutils import XMLGenerator
 from xml.sax.xmlreader import AttributesNSImpl
 
 from . import exact_version
+from . import extract
 from . import convert
 from . import database
 from . import extract
@@ -444,12 +445,19 @@ def _report_data(db, project):
         .order_by(database.Document.name, t_hl.document_id, t_hl.start_offset)
         .all()
     )
+    from .web.api import document_line_starts
+
     extracts_by_tag = {}
     notes = []  # highlights without tags: sticky notes
     for hl, doc_name in rows:
+        first, last = extract.line_range(
+            document_line_starts(db, hl.document_id),
+            hl.start_offset, hl.end_offset,
+        )
         item = {
             'id': hl.id,
             'document': doc_name,
+            'lines': ('%d' % first) if first == last else ('%d-%d' % (first, last)),
             'text': convert.html_to_plaintext(hl.snippet),
             'memo': hl.memo or '',
         }
@@ -533,9 +541,10 @@ def report_markdown(db, project, locale):
         if n['description']:
             w(n['description'].strip() + '\n')
         for ex in n['extracts']:
-            w('> %s\n>\n> — *%s*%s\n' % (
+            w('> %s\n>\n> — *%s*, %s%s\n' % (
                 ex['text'].replace('\n', ' '),
                 ex['document'],
+                tr.pgettext('report', 'l. %(lines)s') % {'lines': ex['lines']},
                 ('  \n> %s: %s' % (tr.pgettext('report', 'Memo'), ex['memo'])) if ex['memo'] else '',
             ))
         for c in n['children']:
@@ -546,6 +555,6 @@ def report_markdown(db, project, locale):
     if data['notes']:
         w('## %s\n' % tr.pgettext('report heading', 'Notes (uncoded)'))
         for ex in data['notes']:
-            w('- **%s** — %s  \n  %s' % (ex['document'], ex['memo'], ex['text'].replace('\n', ' ')))
+            w('- **%s**, %s — %s  \n  %s' % (ex['document'], tr.pgettext('report', 'l. %(lines)s') % {'lines': ex['lines']}, ex['memo'], ex['text'].replace('\n', ' ')))
         w('')
     return '\n'.join(out)

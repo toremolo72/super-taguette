@@ -175,6 +175,18 @@ class DocumentAdd(BaseHandler):
             return await self.send_error_json(400, self.gettext(e.message))
 
 
+def document_line_starts(db, document_id):
+    """Line-start offsets of a document (cached; contents are immutable)."""
+    if document_id in extract._line_cache:
+        return extract._line_cache[document_id]
+    contents = (
+        db.query(database.Document.contents)
+        .filter(database.Document.id == document_id)
+        .scalar()
+    ) or ''
+    return extract.line_starts(contents, cache_key=document_id)
+
+
 class ProjectJournal(BaseHandler):
     """Analytic journal of the project (free text, saved as-is)."""
     @api_auth
@@ -284,6 +296,7 @@ class Document(BaseHandler):
         ).all()
         return self.send_json({
             'text_direction': document.text_direction.name,
+            'line_starts': document_line_starts(self.db, document.id),
             'highlights': [
                 {'id': hl.id,
                  'start_offset': hl.start_offset,
@@ -837,6 +850,10 @@ class Highlights(BaseHandler):
             .all()
         )
 
+        def lines(hl):
+            starts = document_line_starts(self.db, hl.document_id)
+            return extract.line_range(starts, hl.start_offset, hl.end_offset)
+
         return self.send_json({
             'highlights': [
                 {
@@ -845,6 +862,7 @@ class Highlights(BaseHandler):
                     'content': hl.snippet,
                     'tags': [t.id for t in hl.tags],
                     'memo': hl.memo,
+                    'lines': lines(hl),
                     'text_direction': direction.name,
                 }
                 for hl, direction in highlights

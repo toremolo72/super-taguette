@@ -1235,7 +1235,10 @@ function updateModalTagsList() {
     });
   }
 
-  sortByKey(entries, function(e) { return e[1].searchGroup + e[1].path; });
+  sortByKey(entries, function(e) {
+    return (searchFor.length === 0 && modal_pinned_tags.indexOf(e[1].id) > -1 ? '0' : '1') +
+      (e[1].searchGroup || '') + e[1].path;
+  });
 
   // Fill up the list again
   // TODO: Show this as a tree
@@ -1299,7 +1302,10 @@ highlightSearch.addEventListener('keypress', function(e) {
   }
 });
 
+var modal_pinned_tags = [];
+
 function highlightModalReset() {
+  modal_pinned_tags = [];
   document.getElementById('highlight-add-memo').value = '';
   document.getElementById('highlight-add-form').reset();
   updateModalTagsList();
@@ -1663,10 +1669,6 @@ function removeHighlight(id) {
   delete highlights[id];
   console.log("Highlight removed:", id);
   scheduleStickyLayout();
-  if(quickpick_state && quickpick_state.hl_id !== null
-   && '' + quickpick_state.hl_id === id) {
-    quickpickClose();
-  }
 
   // Loop over highlight-<id> elements
   var elements = document.getElementsByClassName('highlight-' + id);
@@ -1862,6 +1864,8 @@ function editHighlightById(id) {
   document.getElementById('highlight-add-start').value = highlights[id].start_offset;
   document.getElementById('highlight-add-end').value = highlights[id].end_offset;
   var hl_tags = highlights['' + id].tags;
+  modal_pinned_tags = hl_tags.slice();
+  updateModalTagsList();
   for(var i = 0; i < hl_tags.length; ++i) {
     var cb = document.getElementById('highlight-add-tags-' + hl_tags[i]);
     if(cb) cb.checked = true;
@@ -2106,6 +2110,7 @@ function quickpickOpenForHighlight(id, x, y) {
     selection: [hl.start_offset, hl.end_offset],
     hl_id: parseInt(id),
     tags: hl.tags.slice(),
+    pinned: hl.tags.slice(),
     memo: hl.memo || '',
     busy: false,
   };
@@ -2127,7 +2132,11 @@ function quickpickFiltered() {
       return (t.path === query ? '0' : t.path.indexOf(query) === 0 ? '1' : '2') + t.path;
     });
   } else {
-    sortByKey(entries, function(t) { return t.path; });
+    // Tags this highlight had when opened come first
+    var pinned = (quickpick_state && quickpick_state.pinned) || [];
+    sortByKey(entries, function(t) {
+      return (pinned.indexOf(t.id) > -1 ? '0' : '1') + t.path;
+    });
   }
   return entries;
 }
@@ -2147,7 +2156,8 @@ function quickpickRender() {
         text = text.replace(/\s+/g, ' ').trim();
         return text.length > 60 ? text.substring(0, 60) + '\u2026' : text;
       })();
-  quickpick_snippet.textContent = snippet;
+  var line_label = lineLabelForOffsets(st.selection[0], st.selection[1]);
+  quickpick_snippet.textContent = (line_label ? line_label + '\u3000' : '') + snippet;
 
   // Tag rows
   while(quickpick_list.firstChild) {
@@ -2164,6 +2174,10 @@ function quickpickRender() {
     row.href = 'javascript:void(0)';
     row.className = 'quickpick-row';
     if(st.tags.indexOf(tag.id) > -1) row.classList.add('checked');
+    if(!query && st.pinned && st.pinned.length && st.pinned.indexOf(tag.id) === -1
+     && idx > 0 && st.pinned.indexOf(entries[idx - 1].id) > -1) {
+      row.classList.add('quickpick-after-pinned');
+    }
     if(idx === quickpick_active) row.classList.add('active');
     row.innerHTML =
       '<span class="quickpick-check"><i class="fas fa-check"></i></span>' +
@@ -2423,18 +2437,127 @@ var sticky_layout_timer = null;
 function clearStickyNotes() {
   while(sticky_container.firstChild) sticky_container.removeChild(sticky_container.firstChild);
   document_view.classList.remove('has-notes');
+  var gutter = document.getElementById('line-gutter');
+  if(gutter) while(gutter.firstChild) gutter.removeChild(gutter.firstChild);
+  document_view.classList.remove('has-lines');
 }
 
 function scheduleStickyLayout() {
   if(sticky_layout_timer !== null) return;
   sticky_layout_timer = window.setTimeout(function() {
     sticky_layout_timer = null;
+    layoutLineNumbers();
     layoutStickyNotes();
   }, 30);
 }
 
+
+/*
+ * Line numbers: shown in a gutter left of the text, and used to cite
+ * highlights ("l. 12-13"). Line starts come from the server so the numbers
+ * match the ones in exports.
+ */
+
+var current_line_starts = [];
+var line_gutter = document.getElementById('line-gutter');
+var line_numbers_checkbox = document.getElementById('show-line-numbers');
+try {
+  if(localStorage.getItem('taguette-line-numbers') === '0') line_numbers_checkbox.checked = false;
+} catch(e) {}
+line_numbers_checkbox.addEventListener('change', function() {
+  try { localStorage.setItem('taguette-line-numbers', line_numbers_checkbox.checked ? '1' : '0'); } catch(e) {}
+  scheduleStickyLayout();
+});
+
+function lineOf(offset) {
+  var lo = 0, hi = current_line_starts.length;
+  while(lo < hi) {
+    var mid = (lo + hi) >> 1;
+    if(current_line_starts[mid] <= offset) lo = mid + 1; else hi = mid;
+  }
+  return Math.max(1, lo);
+}
+
+function lineLabel(first, last) {
+  if(first === last) return gettext("l. %(line)s", {line: first});
+  return gettext("l. %(first)s\u2013%(last)s", {first: first, last: last});
+}
+
+function lineLabelForOffsets(start, end) {
+  if(!current_line_starts.length) return '';
+  return lineLabel(lineOf(start), lineOf(Math.max(start, end - 1)));
+}
+
+// Byte offset inside a text node -> character index
+function byteToCharIndex(text, bytes) {
+  var i = 0;
+  while(bytes > 0 && i < text.length) {
+    var code = text.charCodeAt(i);
+    if(code <= 0x7f) bytes -= 1;
+    else if(code <= 0x7ff) bytes -= 2;
+    else if(code >= 0xd800 && code <= 0xdbff) { bytes -= 4; i += 1; }
+    else bytes -= 3;
+    i += 1;
+  }
+  return i;
+}
+
+// From a (node, byte offset) position, find the first visible character at
+// or after it, as (text node, char index); skips whitespace-only remainders.
+function resolveVisiblePos(node, bytes) {
+  var ci = node && node.nodeType === 3 ? byteToCharIndex(node.textContent, bytes) : 0;
+  var guard = 0;
+  while(node && guard++ < 1000) {
+    if(!document_contents.contains(node)) return null;
+    if(node.nodeType === 3) {
+      var text = node.textContent;
+      while(ci < text.length && /\s/.test(text.charAt(ci))) ci += 1;
+      if(ci < text.length) return [node, ci];
+    }
+    node = nextElement(node);
+    ci = 0;
+  }
+  return null;
+}
+
+function layoutLineNumbers() {
+  while(line_gutter.firstChild) line_gutter.removeChild(line_gutter.firstChild);
+  var show = line_numbers_checkbox.checked && current_document !== null && current_line_starts.length > 0;
+  document_view.classList.toggle('has-lines', show);
+  if(!show) return;
+  var viewTop = document_view.getBoundingClientRect().top;
+  var lastTop = -1000;
+  for(var i = 0; i < current_line_starts.length; ++i) {
+    var pos;
+    try { pos = locatePos(current_line_starts[i]); } catch(e) { continue; }
+    var at = resolveVisiblePos(pos[0], pos[1]);
+    if(at === null) continue;
+    var range = document.createRange();
+    range.setStart(at[0], at[1]);
+    range.setEnd(at[0], at[1] + 1);
+    var rect = range.getBoundingClientRect();
+    if(!rect || (rect.top === 0 && rect.height === 0)) continue;
+    var top = rect.top - viewTop;
+    if(Math.abs(top - lastTop) < 2) continue;
+    lastTop = top;
+    var num = document.createElement('div');
+    num.className = 'line-number' + ((i + 1) % 5 === 0 ? ' line-number-5' : '');
+    num.textContent = i + 1;
+    num.style.top = top + 'px';
+    num.style.height = rect.height + 'px';
+    num.style.lineHeight = rect.height + 'px';
+    line_gutter.appendChild(num);
+  }
+}
+if(window.ResizeObserver) {
+  var line_resize_observer = new ResizeObserver(function() { scheduleStickyLayout(); });
+  line_resize_observer.observe(document.getElementById('document-contents'));
+  line_resize_observer.observe(document.getElementById('document-memo-box'));
+}
+
 function layoutStickyNotes() {
-  clearStickyNotes();
+  while(sticky_container.firstChild) sticky_container.removeChild(sticky_container.firstChild);
+  document_view.classList.remove('has-notes');
   if(current_document === null) return;
   var items = [];
   var hl_entries = Object.values(highlights);
@@ -2832,6 +2955,7 @@ function loadDocument(document_id) {
       document_contents.style.direction = 'ltr';
     }
     current_document = document_id;
+    current_line_starts = info.line_starts || [];
     showDocumentMemo(document_id);
 
     // Update current document highlight in left panel
@@ -2929,6 +3053,13 @@ function loadTag(tag_path, page) {
       doclink.textContent = documents['' + hl.document_id].name;
       linkDocument(doclink, hl.document_id);
       elem.appendChild(doclink);
+      if(hl.lines) {
+        var linebadge = document.createElement('span');
+        linebadge.className = 'badge highlight-lines';
+        linebadge.textContent = lineLabel(hl.lines[0], hl.lines[1]);
+        elem.appendChild(document.createTextNode(' '));
+        elem.appendChild(linebadge);
+      }
       elem.appendChild(document.createTextNode(' '));
 
       var tag_names = hl.tags.map(function(tag) { return tags['' + tag].path; });
@@ -3160,6 +3291,10 @@ function longPollForEvents() {
           });
         }
       } else if(event.type === 'highlight_delete') {
+        if(quickpick_state && quickpick_state.hl_id !== null
+         && '' + quickpick_state.hl_id === '' + event.highlight_id) {
+          quickpickClose();
+        }
         removeHighlight(event.highlight_id);
       } else if(event.type === 'tag_add') {
         addTag({

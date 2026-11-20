@@ -285,3 +285,67 @@ def highlight(html, highlights, show_tags=False):
 
     # Back to text
     return str(soup)
+
+
+# ---------------------------------------------------------------------------
+# Line numbers. A "line" starts at the first visible character after the start
+# of a block element or after a <br>. Offsets are UTF-8 byte offsets in the
+# document's text, the same unit as highlight offsets.
+
+_BLOCK_TAGS = {
+    'p', 'div', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote',
+    'pre', 'tr', 'td', 'th', 'dt', 'dd', 'section', 'article', 'table',
+    'ul', 'ol', 'header', 'footer', 'figure', 'figcaption', 'hr',
+}
+
+_line_cache = {}
+
+
+def line_starts(html, cache_key=None):
+    """List of byte offsets at which each line starts, in order."""
+    if cache_key is not None and cache_key in _line_cache:
+        return _line_cache[cache_key]
+    soup = BeautifulSoup(html, 'html5lib')
+    starts = []
+    pos = 0
+    pending = True
+    for node in soup.body.descendants if soup.body else soup.descendants:
+        if isinstance(node, NavigableString):
+            if type(node) is not NavigableString:
+                continue  # comments, doctype...
+            text = str(node)
+            if pending:
+                stripped = text.lstrip()
+                if stripped:
+                    lead = text[:len(text) - len(stripped)]
+                    starts.append(pos + len(lead.encode('utf-8')))
+                    pending = False
+            # A newline inside <pre> also starts a line
+            if node.parent is not None and node.parent.name == 'pre':
+                b = 0
+                for i, ch in enumerate(text):
+                    if ch == '\n' and text[i + 1:].strip():
+                        rest = text[i + 1:]
+                        lead = rest[:len(rest) - len(rest.lstrip())]
+                        starts.append(
+                            pos + len(text[:i + 1].encode('utf-8'))
+                            + len(lead.encode('utf-8'))
+                        )
+            pos += len(text.encode('utf-8'))
+        elif node.name in _BLOCK_TAGS or node.name == 'br':
+            pending = True
+    starts = sorted(set(starts))
+    if cache_key is not None:
+        _line_cache[cache_key] = starts
+    return starts
+
+
+def line_of(starts, offset):
+    """1-based line number containing the given byte offset."""
+    import bisect
+    return max(1, bisect.bisect_right(starts, offset))
+
+
+def line_range(starts, start, end):
+    """(first line, last line) covered by [start, end)."""
+    return line_of(starts, start), line_of(starts, max(start, end - 1))

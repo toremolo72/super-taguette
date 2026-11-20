@@ -397,7 +397,9 @@ class BaseHandler(HandleStreamClosed, RequestHandler):
 
     @jinja2.pass_context
     def _tpl_static_url(context, path):
-        v = not context['handler'].application.settings.get('debug', False)
+        # Always version static URLs (the hash is recomputed in debug mode),
+        # so browsers like Safari don't keep stale JS/CSS after an update
+        v = True
         return context['handler'].static_url(path, include_version=v)
     template_env.globals['static_url'] = _tpl_static_url
 

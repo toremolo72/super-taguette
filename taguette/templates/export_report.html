@@ -42,7 +42,7 @@
       <{{ h }}>{% if n.color %}<span class="swatch" style="background: {{ n.color }}"></span>{% endif %}{{ n.name }}{% if not n.is_folder %} <span class="count">({{ n.count }})</span>{% endif %}</{{ h }}>
       {% if n.description %}<p class="definition">{{ n.description }}</p>{% endif %}
       {% for ex in n.extracts %}
-      <blockquote>{{ ex.text }}{% if ex.memo %}<br><span class="memo">{% trans "report" %}Memo{% endtrans %}: {{ ex.memo }}</span>{% endif %}<span class="src">— {{ ex.document }}</span></blockquote>
+      <blockquote>{{ ex.text }}{% if ex.memo %}<br><span class="memo">{% trans "report" %}Memo{% endtrans %}: {{ ex.memo }}</span>{% endif %}<span class="src">— {{ ex.document }}, {% trans "report" lines=ex.lines %}l. {{ lines }}{% endtrans %}</span></blockquote>
       {% endfor %}
       {% for c in n.children %}{{ render(c, level + 1) }}{% endfor %}
     </div>
@@ -52,7 +52,7 @@
     {% if notes %}
     <h2>{% trans "report heading" %}Notes (uncoded){% endtrans %}</h2>
     {% for ex in notes %}
-    <blockquote>{{ ex.text }}<br><span class="memo">{{ ex.memo }}</span><span class="src">— {{ ex.document }}</span></blockquote>
+    <blockquote>{{ ex.text }}<br><span class="memo">{{ ex.memo }}</span><span class="src">— {{ ex.document }}, {% trans "report" lines=ex.lines %}l. {{ lines }}{% endtrans %}</span></blockquote>
     {% endfor %}
     {% endif %}
   </body>
