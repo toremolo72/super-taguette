@@ -169,6 +169,8 @@ def make_app(config, debug=False, xsrf_cookies=True):
         UnbakedURLSpec('/api/project/([0-9]+)', api.ProjectMeta),
         UnbakedURLSpec('/api/project/([0-9]+)/journal', api.ProjectJournal),
         UnbakedURLSpec('/api/project/([0-9]+)/matrix', api.Matrix),
+        UnbakedURLSpec('/api/project/([0-9]+)/document_stats',
+                       api.DocumentStats),
         UnbakedURLSpec('/api/project/([0-9]+)/document/([0-9]+)/memo',
                        api.DocumentMemo),
         UnbakedURLSpec('/api/project/([0-9]+)/document/new', api.DocumentAdd),

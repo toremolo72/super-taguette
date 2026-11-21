@@ -724,10 +724,13 @@ class Project(BaseHandler):
     @PROM_REQUESTS.sync('project')
     def get(self, project_id):
         project, privileges = self.get_project(project_id)
+        from .api import coded_counts
+        coded = coded_counts(self.db, project.id)
         documents_json = html_safe_json_dumps({
             str(doc.id): {'id': doc.id, 'name': doc.name,
                           'description': doc.description,
                           'memo': doc.memo,
+                          'coded': coded.get(str(doc.id), 0),
                           'text_direction': doc.text_direction.name}
             for doc in project.documents
         })

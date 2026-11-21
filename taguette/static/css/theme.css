@@ -1673,3 +1673,23 @@ li.tag-current {
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- Documents with at least one coded highlight ---------- */
+
+.list-group-item.document-link {
+  border-left: 4px solid transparent;
+}
+.list-group-item.document-link.document-coded {
+  border-left-color: var(--se-mint);
+}
+.document-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+}
+.document-coded-count {
+  font-size: 0.75em;
+  font-variant-numeric: tabular-nums;
+  color: var(--se-text-muted);
+}

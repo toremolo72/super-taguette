@@ -229,3 +229,7 @@ msgstr "%(line)s行目"
 #: taguette/static/js/taguette.js
 msgid "l. %(first)s–%(last)s"
 msgstr "%(first)s–%(last)s行目"
+
+#: taguette/static/js/taguette.js
+msgid "%(n)s coded highlights"
+msgstr "コード付きのハイライト %(n)s 件"

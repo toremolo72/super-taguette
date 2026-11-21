@@ -653,6 +653,29 @@ function linkDocument(elem, doc_id) {
   });
 }
 
+// Refresh the per-document "coded" counts (debounced)
+var document_stats_timer = null;
+function refreshDocumentStats() {
+  if(document_stats_timer !== null) clearTimeout(document_stats_timer);
+  document_stats_timer = setTimeout(function() {
+    document_stats_timer = null;
+    getJSON('/api/project/' + project_id + '/document_stats')
+    .then(function(result) {
+      var changed = false;
+      var ids = Object.keys(documents);
+      for(var i = 0; i < ids.length; ++i) {
+        var n = result.coded[ids[i]] || 0;
+        if((documents[ids[i]].coded || 0) !== n) {
+          documents[ids[i]].coded = n;
+          changed = true;
+        }
+      }
+      if(changed) updateDocumentsList();
+    })
+    .catch(function(error) { console.error("Failed to refresh document stats:", error); });
+  }, 400);
+}
+
 function updateDocumentsList() {
   // Empty the list
   while(documents_list.firstChild) {
@@ -676,10 +699,18 @@ function updateDocumentsList() {
     if(doc.id === current_document) {
       elem.classList.add('document-link-current');
     }
+    var coded = doc.coded || 0;
+    if(coded > 0) {
+      elem.classList.add('document-coded');
+      elem.setAttribute('title', gettext("%(n)s coded highlights", {n: coded}));
+    }
     elem.innerHTML =
       '<div class="d-flex justify-content-between align-items-center">' +
       '  <a class="document-link-a">' + escapeHtml(doc.name) + '</a>' +
+      '  <div class="document-row-actions">' +
+      (coded > 0 ? '<span class="document-coded-count">' + coded + '</span>' : '') +
       '  <a href="javascript:editDocument(' + doc.id + ');" class="btn btn-primary btn-sm">' + gettext("Edit") + '</a>' +
+      '  </div>' +
       '</div>';
     documents_list.insertBefore(elem, before);
     var links = elem.getElementsByTagName('a');
@@ -699,6 +730,9 @@ updateDocumentsList();
 function addDocument(document) {
   if(!('memo' in document) && documents['' + document.id]) {
     document.memo = documents['' + document.id].memo;
+  }
+  if(!('coded' in document) && documents['' + document.id]) {
+    document.coded = documents['' + document.id].coded;
   }
   documents['' + document.id] = document;
   if(document.id === current_document) {
@@ -3312,6 +3346,11 @@ function longPollForEvents() {
         addMember(event.member, event.privileges);
       } else if(event.type === 'member_remove') {
         removeMember(event.member);
+      }
+
+      if(event.type === 'highlight_add' || event.type === 'highlight_delete'
+       || event.type === 'tag_delete' || event.type === 'tag_merge') {
+        refreshDocumentStats();
       }
 
       if('tag_count_changes' in event) {

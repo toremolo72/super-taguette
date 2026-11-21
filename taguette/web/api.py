@@ -187,6 +187,37 @@ def document_line_starts(db, document_id):
     return extract.line_starts(contents, cache_key=document_id)
 
 
+def coded_counts(db, project_id):
+    """Number of highlights carrying at least one code, per document."""
+    rows = (
+        db.query(
+            database.Highlight.document_id,
+            func.count(func.distinct(database.Highlight.id)),
+        )
+        .join(
+            database.highlight_tags,
+            database.highlight_tags.c.highlight_id == database.Highlight.id,
+        )
+        .join(
+            database.Document,
+            database.Document.id == database.Highlight.document_id,
+        )
+        .filter(database.Document.project_id == project_id)
+        .group_by(database.Highlight.document_id)
+        .all()
+    )
+    return {str(doc_id): count for doc_id, count in rows}
+
+
+class DocumentStats(BaseHandler):
+    """Per-document coding progress, for the documents list."""
+    @api_auth
+    @PROM_REQUESTS.sync('document_stats')
+    def get(self, project_id):
+        project, _ = self.get_project(project_id)
+        return self.send_json({'coded': coded_counts(self.db, project.id)})
+
+
 class ProjectJournal(BaseHandler):
     """Analytic journal of the project (free text, saved as-is)."""
     @api_auth
