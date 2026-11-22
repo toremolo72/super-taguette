@@ -35,6 +35,7 @@
             <a class="btn btn-sm btn-outline-primary" href="javascript:createFolder()" title="{% trans "tag tree" %}Folders group tags; they can't be applied to highlights{% endtrans %}"><i class="fas fa-folder-plus"></i> {% trans "tag tree" %}New folder{% endtrans %}</a>
             <a id="load-all-tags" class="btn btn-sm btn-outline-primary" href="/project/{{ project.id }}/highlights/">{% trans %}See all highlights{% endtrans %}</a>
             <a class="btn btn-sm btn-outline-primary" href="javascript:showMatrix()" title="{% trans "matrix" %}Highlights per code and document{% endtrans %}"><i class="fas fa-th"></i> {% trans "matrix" %}Matrix{% endtrans %}</a>
+            <a class="btn btn-sm btn-outline-primary" href="javascript:showCodeTree()" title="{% trans "code tree" %}Export the code hierarchy as text or an image{% endtrans %}"><i class="fas fa-sitemap"></i> {% trans "code tree" %}Code tree{% endtrans %}</a>
             <div class="dropdown">
               <button class="btn btn-sm btn-outline-primary" type="button" id="tag-sortby-button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                 <i class="fa fa-sort"></i>
@@ -444,6 +445,54 @@
 <script type="text/javascript" src="{{ reverse_url('trans.js') }}"></script>
 
 <!-- "New highlight" button shown after selecting text -->
+<!-- Code tree export modal -->
+<div class="modal" id="codetree-modal" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-dialog-centered modal-xl" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">{% trans "code tree" %}Code hierarchy{% endtrans %}</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+      </div>
+      <div class="modal-body">
+        <div class="codetree-options">
+          <label><input type="checkbox" id="codetree-counts" checked /> {% trans "code tree" %}Counts{% endtrans %}</label>
+          <label><input type="checkbox" id="codetree-docs" checked /> {% trans "code tree" %}Number of documents{% endtrans %}</label>
+          <label><input type="checkbox" id="codetree-defs" /> {% trans "code tree" %}Definitions{% endtrans %}</label>
+          <label><input type="checkbox" id="codetree-empty" checked /> {% trans "code tree" %}Include unused codes{% endtrans %}</label>
+        </div>
+        <ul class="nav nav-tabs codetree-tabs" role="tablist">
+          <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#codetree-pane-image" role="tab">{% trans "code tree" %}Image{% endtrans %}</a></li>
+          <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#codetree-pane-text" role="tab">{% trans "code tree" %}Text{% endtrans %}</a></li>
+          <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#codetree-pane-md" role="tab">Markdown</a></li>
+        </ul>
+        <div class="tab-content codetree-content">
+          <div class="tab-pane fade show active" id="codetree-pane-image" role="tabpanel">
+            <div id="codetree-svg-wrap"></div>
+            <div class="codetree-actions">
+              <a href="javascript:void(0)" class="btn btn-sm btn-primary" id="codetree-dl-png"><i class="fas fa-download"></i> PNG</a>
+              <a href="javascript:void(0)" class="btn btn-sm btn-outline-primary" id="codetree-dl-svg"><i class="fas fa-download"></i> SVG</a>
+            </div>
+          </div>
+          <div class="tab-pane fade" id="codetree-pane-text" role="tabpanel">
+            <textarea id="codetree-text" class="form-control codetree-textarea" readonly></textarea>
+            <div class="codetree-actions">
+              <a href="javascript:void(0)" class="btn btn-sm btn-primary" data-copy="codetree-text"><i class="fas fa-copy"></i> {% trans "code tree" %}Copy{% endtrans %}</a>
+              <a href="javascript:void(0)" class="btn btn-sm btn-outline-primary" id="codetree-dl-txt"><i class="fas fa-download"></i> .txt</a>
+            </div>
+          </div>
+          <div class="tab-pane fade" id="codetree-pane-md" role="tabpanel">
+            <textarea id="codetree-md" class="form-control codetree-textarea" readonly></textarea>
+            <div class="codetree-actions">
+              <a href="javascript:void(0)" class="btn btn-sm btn-primary" data-copy="codetree-md"><i class="fas fa-copy"></i> {% trans "code tree" %}Copy{% endtrans %}</a>
+              <a href="javascript:void(0)" class="btn btn-sm btn-outline-primary" id="codetree-dl-md"><i class="fas fa-download"></i> .md</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Matrix modal -->
 <div class="modal" id="matrix-modal" tabindex="-1" role="dialog">
   <div class="modal-dialog modal-dialog-centered modal-xl" role="document">

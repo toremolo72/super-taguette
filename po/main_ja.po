@@ -1366,3 +1366,53 @@ msgstr "行番号"
 msgctxt "report"
 msgid "l. %(lines)s"
 msgstr "%(lines)s行目"
+
+#: taguette/templates/project.html
+msgctxt "code tree"
+msgid "Export the code hierarchy as text or an image"
+msgstr "コードの階層構造を画像・テキストで書き出す"
+
+#: taguette/templates/project.html
+msgctxt "code tree"
+msgid "Code tree"
+msgstr "コード階層"
+
+#: taguette/templates/project.html
+msgctxt "code tree"
+msgid "Code hierarchy"
+msgstr "コードの階層構造"
+
+#: taguette/templates/project.html
+msgctxt "code tree"
+msgid "Counts"
+msgstr "件数"
+
+#: taguette/templates/project.html
+msgctxt "code tree"
+msgid "Number of documents"
+msgstr "文書数"
+
+#: taguette/templates/project.html
+msgctxt "code tree"
+msgid "Definitions"
+msgstr "定義（説明）"
+
+#: taguette/templates/project.html
+msgctxt "code tree"
+msgid "Include unused codes"
+msgstr "未使用のコードも含める"
+
+#: taguette/templates/project.html
+msgctxt "code tree"
+msgid "Image"
+msgstr "画像"
+
+#: taguette/templates/project.html
+msgctxt "code tree"
+msgid "Text"
+msgstr "テキスト"
+
+#: taguette/templates/project.html
+msgctxt "code tree"
+msgid "Copy"
+msgstr "コピー"

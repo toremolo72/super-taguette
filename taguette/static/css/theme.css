@@ -1693,3 +1693,40 @@ li.tag-current {
   font-variant-numeric: tabular-nums;
   color: var(--se-text-muted);
 }
+
+/* ---------- Code tree export ---------- */
+
+.codetree-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.2rem;
+  margin-bottom: 0.9rem;
+  font-size: 0.9em;
+  color: var(--se-text);
+}
+.codetree-options label { margin: 0; cursor: pointer; }
+.codetree-options input { margin-right: 0.3em; accent-color: var(--se-purple); }
+.codetree-content {
+  border-radius: 0 0 var(--se-radius) var(--se-radius);
+}
+#codetree-svg-wrap {
+  max-height: 60vh;
+  overflow: auto;
+  border: 1px solid var(--se-border);
+  border-radius: var(--se-radius-sm);
+}
+#codetree-svg-wrap svg { display: block; }
+.codetree-textarea {
+  height: 60vh;
+  font-family: "SFMono-Regular", Menlo, "Hiragino Sans", monospace;
+  font-size: 0.85em;
+  line-height: 1.55;
+  white-space: pre;
+  resize: vertical;
+}
+.codetree-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.75rem;
+}

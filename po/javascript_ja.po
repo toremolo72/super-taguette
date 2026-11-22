@@ -233,3 +233,19 @@ msgstr "%(first)s–%(last)s行目"
 #: taguette/static/js/taguette.js
 msgid "%(n)s coded highlights"
 msgstr "コード付きのハイライト %(n)s 件"
+
+#: taguette/static/js/taguette.js
+msgid "Code hierarchy"
+msgstr "コードの階層構造"
+
+#: taguette/static/js/taguette.js
+msgid "%(n)s highlights"
+msgstr "%(n)s件"
+
+#: taguette/static/js/taguette.js
+msgid "%(n)s documents"
+msgstr "%(n)s文書"
+
+#: taguette/static/js/taguette.js
+msgid "Copied"
+msgstr "コピーしました"

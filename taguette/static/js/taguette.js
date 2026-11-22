@@ -2769,6 +2769,258 @@ function showMatrix() {
 
 
 /*
+ * Code tree export: the code hierarchy as an image (SVG/PNG), a text tree,
+ * or Markdown
+ */
+
+var codetree_docs = {};  // tag id -> set of document ids (from the matrix API)
+
+function codetreeBuild(opts) {
+  // Tree of nodes {path, name, tag, children, count, docs}
+  var root = {path: '', children: {}};
+  var list = Object.values(tags);
+  function nodeFor(path) {
+    var parts = path.split(TAG_SEP), node = root, acc = '';
+    for(var i = 0; i < parts.length; ++i) {
+      acc = acc ? acc + TAG_SEP + parts[i] : parts[i];
+      if(!node.children[parts[i]]) node.children[parts[i]] = {path: acc, name: parts[i], tag: null, children: {}};
+      node = node.children[parts[i]];
+    }
+    return node;
+  }
+  for(var i = 0; i < list.length; ++i) nodeFor(list[i].path).tag = list[i];
+  function finish(node) {
+    var kids = Object.values(node.children).map(finish).filter(function(k) { return k !== null; });
+    sortByKey(kids, function(k) { return (k.is_folder ? '0' : '1') + k.name; });
+    var count = node.tag && !node.tag.is_folder ? node.tag.count : 0;
+    var docs = {};
+    if(node.tag && codetree_docs[node.tag.id]) {
+      Object.keys(codetree_docs[node.tag.id]).forEach(function(d) { docs[d] = 1; });
+    }
+    for(var i = 0; i < kids.length; ++i) {
+      count += kids[i].count;
+      Object.keys(kids[i].docs).forEach(function(d) { docs[d] = 1; });
+    }
+    var is_folder = !node.tag || !!node.tag.is_folder;
+    var res = {
+      path: node.path, name: node.name, tag: node.tag, is_folder: is_folder,
+      children: kids, count: count, docs: docs,
+      color: node.tag ? tagColor(node.tag.id, 1) : 'rgb(170, 170, 180)',
+      definition: node.tag ? (node.tag.description || '') : '',
+    };
+    if(!opts.empty && node.path && count === 0) return null;
+    return res;
+  }
+  return finish(root).children;
+}
+
+function codetreeLabel(n, opts) {
+  var bits = [];
+  if(opts.counts) bits.push(gettext("%(n)s highlights", {n: n.count}));
+  if(opts.docs) bits.push(gettext("%(n)s documents", {n: Object.keys(n.docs).length}));
+  return bits.join(' \u00b7 ');
+}
+
+function codetreeText(nodes, opts) {
+  var out = [project_name + ' \u2014 ' + gettext("Code hierarchy"), ''];
+  function walk(list, prefix) {
+    for(var i = 0; i < list.length; ++i) {
+      var n = list[i], last = i === list.length - 1;
+      var label = (n.is_folder ? '[' + n.name + ']' : n.name);
+      var meta = codetreeLabel(n, opts);
+      out.push(prefix + (last ? '\u2514\u2500 ' : '\u251c\u2500 ') + label + (meta ? '  (' + meta + ')' : ''));
+      var childPrefix = prefix + (last ? '   ' : '\u2502  ');
+      if(opts.defs && n.definition) {
+        out.push(childPrefix + (n.children.length ? '\u2502 ' : '  ') + '\u201c' + n.definition.replace(/\s+/g, ' ') + '\u201d');
+      }
+      walk(n.children, childPrefix);
+    }
+  }
+  walk(nodes, '');
+  return out.join('\n') + '\n';
+}
+
+function codetreeMarkdown(nodes, opts) {
+  var out = ['# ' + project_name + ' \u2014 ' + gettext("Code hierarchy"), ''];
+  function walk(list, depth) {
+    for(var i = 0; i < list.length; ++i) {
+      var n = list[i];
+      var meta = codetreeLabel(n, opts);
+      var line = '  '.repeat(depth) + '- ' + (n.is_folder ? '**' + n.name + '**' : n.name) + (meta ? ' (' + meta + ')' : '');
+      if(opts.defs && n.definition) line += ' \u2014 ' + n.definition.replace(/\s+/g, ' ');
+      out.push(line);
+      walk(n.children, depth + 1);
+    }
+  }
+  walk(nodes, 0);
+  return out.join('\n') + '\n';
+}
+
+function codetreeSvg(nodes, opts) {
+  var css = getComputedStyle(document.documentElement);
+  function v(name, fallback) { return (css.getPropertyValue(name) || '').trim() || fallback; }
+  var bg = v('--se-surface', '#ffffff'), text = v('--se-text-strong', '#333'),
+      muted = v('--se-text-muted', '#888'), line = v('--se-border-2', '#ccc');
+  var font = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", Meiryo, sans-serif';
+  var rowH = 34, defH = 20, indent = 30, padX = 28, padY = 26, titleH = 46;
+  var rows = [];
+  function walk(list, depth, parentRow) {
+    for(var i = 0; i < list.length; ++i) {
+      var r = {node: list[i], depth: depth, parent: parentRow};
+      rows.push(r);
+      walk(list[i].children, depth + 1, r);
+    }
+  }
+  walk(nodes, 0, null);
+  // y positions (definitions add height)
+  var y = padY + titleH;
+  rows.forEach(function(r) {
+    r.y = y + rowH / 2;
+    y += rowH + (opts.defs && r.node.definition ? defH : 0);
+  });
+  var height = y + padY;
+  // width estimate from text length (CJK ~1em, latin ~0.6em)
+  function textWidth(s, size) {
+    var w = 0;
+    for(var i = 0; i < s.length; ++i) w += s.charCodeAt(i) > 0x2e80 ? size : size * 0.6;
+    return w;
+  }
+  var width = 420;
+  rows.forEach(function(r) {
+    var x = padX + r.depth * indent + 22;
+    var meta = codetreeLabel(r.node, opts);
+    var w = x + textWidth(r.node.name, 15) + (meta ? 14 + textWidth(meta, 12) : 0);
+    if(opts.defs && r.node.definition) w = Math.max(w, x + textWidth(r.node.definition, 12));
+    width = Math.max(width, w + padX);
+  });
+  width = Math.min(Math.ceil(width), 2400);
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+  var svg = [];
+  svg.push('<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '" font-family=\'' + font + '\'>');
+  svg.push('<rect width="100%" height="100%" fill="' + bg + '"/>');
+  svg.push('<text x="' + padX + '" y="' + (padY + 18) + '" font-size="18" font-weight="700" fill="' + text + '">' + esc(project_name) + '</text>');
+  svg.push('<text x="' + padX + '" y="' + (padY + 36) + '" font-size="12" fill="' + muted + '">' + esc(gettext("Code hierarchy")) + '</text>');
+  // connectors
+  rows.forEach(function(r) {
+    if(!r.parent) return;
+    var px = padX + r.parent.depth * indent + 7, x = padX + r.depth * indent;
+    svg.push('<path d="M' + px + ' ' + (r.parent.y + 9) + ' V' + r.y + ' H' + (x + 1) + '" fill="none" stroke="' + line + '" stroke-width="1.5"/>');
+  });
+  rows.forEach(function(r) {
+    var n = r.node, x = padX + r.depth * indent;
+    if(n.is_folder) {
+      // folder icon
+      svg.push('<path d="M' + x + ' ' + (r.y - 6) + ' h5 l2 2 h7 a1 1 0 0 1 1 1 v8 a1 1 0 0 1 -1 1 h-13 a1 1 0 0 1 -1 -1 v-10 a1 1 0 0 1 1 -1z" transform="translate(0,-1)" fill="' + n.color + '"/>');
+    } else {
+      svg.push('<circle cx="' + (x + 7) + '" cy="' + r.y + '" r="6" fill="' + n.color + '" stroke="rgba(0,0,0,0.15)"/>');
+    }
+    var tx = x + 22;
+    svg.push('<text x="' + tx + '" y="' + (r.y + 5) + '" font-size="15" font-weight="' + (n.is_folder ? 700 : 400) + '" fill="' + text + '">' + esc(n.name) +
+      (codetreeLabel(n, opts) ? '<tspan dx="10" font-size="12" font-weight="400" fill="' + muted + '">' + esc(codetreeLabel(n, opts)) + '</tspan>' : '') + '</text>');
+    if(opts.defs && n.definition) {
+      svg.push('<text x="' + tx + '" y="' + (r.y + 23) + '" font-size="12" fill="' + muted + '">' + esc(n.definition.replace(/\s+/g, ' ')) + '</text>');
+    }
+  });
+  svg.push('</svg>');
+  return {svg: svg.join(''), width: width, height: height};
+}
+
+function codetreeOptions() {
+  return {
+    counts: document.getElementById('codetree-counts').checked,
+    docs: document.getElementById('codetree-docs').checked,
+    defs: document.getElementById('codetree-defs').checked,
+    empty: document.getElementById('codetree-empty').checked,
+  };
+}
+
+var codetree_current = null;
+
+function codetreeRender() {
+  var opts = codetreeOptions();
+  var nodes = codetreeBuild(opts);
+  codetree_current = {svg: codetreeSvg(nodes, opts), text: codetreeText(nodes, opts), md: codetreeMarkdown(nodes, opts)};
+  document.getElementById('codetree-svg-wrap').innerHTML = codetree_current.svg.svg;
+  document.getElementById('codetree-text').value = codetree_current.text;
+  document.getElementById('codetree-md').value = codetree_current.md;
+}
+
+function codetreeFilename(ext) {
+  return (project_name || 'project').replace(/[\\/:*?"<>|]+/g, '_') + '_codes.' + ext;
+}
+
+function downloadBlob(blob, filename) {
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function() { URL.revokeObjectURL(url); a.remove(); }, 1000);
+}
+
+function showCodeTree() {
+  $('#codetree-modal').modal();
+  document.getElementById('codetree-svg-wrap').innerHTML = '<p class="text-muted">' + gettext("Loading...") + '</p>';
+  getJSON('/api/project/' + project_id + '/matrix')
+  .then(function(data) {
+    codetree_docs = {};
+    Object.keys(data.cells).forEach(function(tid) {
+      codetree_docs[tid] = {};
+      Object.keys(data.cells[tid]).forEach(function(d) { codetree_docs[tid][d] = 1; });
+    });
+  })
+  .catch(function(error) { console.error("Failed to load matrix:", error); })
+  .then(codetreeRender);
+}
+
+['codetree-counts', 'codetree-docs', 'codetree-defs', 'codetree-empty'].forEach(function(id) {
+  document.getElementById(id).addEventListener('change', codetreeRender);
+});
+document.getElementById('codetree-dl-svg').addEventListener('click', function() {
+  if(!codetree_current) return;
+  downloadBlob(new Blob([codetree_current.svg.svg], {type: 'image/svg+xml'}), codetreeFilename('svg'));
+});
+document.getElementById('codetree-dl-png').addEventListener('click', function() {
+  if(!codetree_current) return;
+  var s = codetree_current.svg, scale = 2;
+  var img = new Image();
+  img.onload = function() {
+    var canvas = document.createElement('canvas');
+    canvas.width = s.width * scale;
+    canvas.height = s.height * scale;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, 0, 0);
+    canvas.toBlob(function(blob) { downloadBlob(blob, codetreeFilename('png')); }, 'image/png');
+  };
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s.svg);
+});
+document.getElementById('codetree-dl-txt').addEventListener('click', function() {
+  if(codetree_current) downloadBlob(new Blob([codetree_current.text], {type: 'text/plain;charset=utf-8'}), codetreeFilename('txt'));
+});
+document.getElementById('codetree-dl-md').addEventListener('click', function() {
+  if(codetree_current) downloadBlob(new Blob([codetree_current.md], {type: 'text/markdown;charset=utf-8'}), codetreeFilename('md'));
+});
+(function() {
+  var buttons = document.querySelectorAll('#codetree-modal [data-copy]');
+  for(var i = 0; i < buttons.length; ++i) {
+    buttons[i].addEventListener('click', function() {
+      var ta = document.getElementById(this.getAttribute('data-copy'));
+      var btn = this, label = btn.innerHTML;
+      function done() { btn.innerHTML = '<i class="fas fa-check"></i> ' + gettext("Copied"); setTimeout(function() { btn.innerHTML = label; }, 1500); }
+      if(navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(ta.value).then(done, function() { ta.select(); document.execCommand('copy'); done(); });
+      } else {
+        ta.select(); document.execCommand('copy'); done();
+      }
+    });
+  }
+})();
+
+
+/*
  * Members
  */
 
